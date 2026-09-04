@@ -8,7 +8,8 @@ const {
   Routes
 } = require("discord.js");
 
-const { initDb } = require("./db");
+const db = require("./db");
+const { initDb } = db;
 const { commands, handleCommand } = require("./commands");
 const {
   createTicket,
@@ -23,7 +24,8 @@ const {
   canCloseTicket,
   showRobberyMenu,
   createRobberyTicket,
-  robberyRequestModal
+  robberyRequestModal,
+  confirmRobberyArrived
 } = require("./tickets");
 
 const requiredEnv = [
@@ -60,9 +62,48 @@ async function registerCommands() {
   console.log(`✅ ${commands.length} commandes slash synchronisées.`);
 }
 
+
+async function expireRobberyTickets() {
+  try {
+    const expired = await db.getExpiredRobberyTickets();
+
+    for (const ticket of expired) {
+      const guild = client.guilds.cache.get(ticket.guild_id);
+      if (!guild) continue;
+
+      const channel = guild.channels.cache.get(ticket.channel_id);
+      if (!channel?.isTextBased()) {
+        await db.closeTicket(ticket.id, client.user.id, "Délai de 20 minutes dépassé.");
+        continue;
+      }
+
+      await channel.send({
+        embeds: [{
+          title: "❌ Braquage annulé",
+          description:
+            "Le délai de **20 minutes** après l'acceptation par la police est dépassé.\n\n" +
+            "Tous les membres n'ont pas été confirmés au point du braquage à temps.\n" +
+            "**Le braquage est annulé et ce ticket va être fermé automatiquement.**",
+          timestamp: new Date().toISOString()
+        }]
+      }).catch(() => {});
+
+      await db.closeTicket(ticket.id, client.user.id, "Délai de 20 minutes dépassé — braquage annulé.");
+
+      setTimeout(() => {
+        channel.delete("Braquage annulé : délai de 20 minutes dépassé").catch(() => {});
+      }, 5000);
+    }
+  } catch (error) {
+    console.error("Erreur expiration braquages:", error);
+  }
+}
+
 client.once("ready", async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   console.log(`✅ Serveurs : ${client.guilds.cache.size}`);
+  await expireRobberyTickets();
+  setInterval(expireRobberyTickets, 60 * 1000);
 });
 
 client.on("interactionCreate", async interaction => {
@@ -116,6 +157,10 @@ client.on("interactionCreate", async interaction => {
           });
         }
         return interaction.showModal(memberModal("remove"));
+      }
+
+      if (interaction.customId === "robbery_arrived") {
+        return await confirmRobberyArrived(interaction, ticket);
       }
 
       if (interaction.customId === "ticket_close") {

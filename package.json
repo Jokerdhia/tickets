@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "3.0.0",
-  "description": "Bot Discord HMPD tickets braquage avec formulaire Gang/Mafia, nombre et armes",
+  "version": "4.0.0",
+  "description": "HMPD ticket bot - braquages avec délai de 20 minutes après acceptation police",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

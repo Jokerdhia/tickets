@@ -20,6 +20,8 @@ async function initDb() {
       owner_id TEXT NOT NULL,
       ticket_type TEXT NOT NULL,
       robbery_type TEXT,
+      robbery_deadline TIMESTAMPTZ,
+      robbery_arrived_at TIMESTAMPTZ,
       status TEXT NOT NULL DEFAULT 'open',
       claimed_by TEXT,
       close_reason TEXT,
@@ -31,6 +33,8 @@ async function initDb() {
   `);
 
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_type TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_deadline TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_arrived_at TIMESTAMPTZ;`);
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tickets_owner_status
@@ -163,6 +167,42 @@ async function getOpenRobberyTicketForUser(guildId, ownerId) {
   return rows[0] || null;
 }
 
+
+async function setRobberyDeadline(ticketId, deadline) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET robbery_deadline = $2
+     WHERE id = $1 AND status = 'open'
+     RETURNING *`,
+    [ticketId, deadline]
+  );
+  return rows[0] || null;
+}
+
+async function markRobberyArrived(ticketId) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET robbery_arrived_at = NOW()
+     WHERE id = $1 AND status = 'open'
+     RETURNING *`,
+    [ticketId]
+  );
+  return rows[0] || null;
+}
+
+async function getExpiredRobberyTickets() {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM tickets
+     WHERE ticket_type = 'robbery'
+       AND status = 'open'
+       AND robbery_deadline IS NOT NULL
+       AND robbery_arrived_at IS NULL
+       AND robbery_deadline <= NOW()`
+  );
+  return rows;
+}
+
 module.exports = {
   pool,
   initDb,
@@ -175,5 +215,8 @@ module.exports = {
   addTicketMember,
   removeTicketMember,
   countOpenRobberyTickets,
-  getOpenRobberyTicketForUser
+  getOpenRobberyTicketForUser,
+  setRobberyDeadline,
+  markRobberyArrived,
+  getExpiredRobberyTickets
 };

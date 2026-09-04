@@ -195,3 +195,18 @@ Après le choix de l'opération, le bot ouvre un formulaire obligatoire avec uni
 - Modèle(s) d'arme
 
 Le ticket est créé après validation et affiche ces trois informations directement dans l'embed.
+
+
+# V4 — Acceptation police et délai de 20 minutes
+
+Pour les tickets de braquage :
+
+- les boutons **Ajouter membre** et **Retirer membre** ont été supprimés ;
+- quand un membre du staff clique sur **Prendre**, le braquage est considéré comme accepté ;
+- un délai de **20 minutes** démarre immédiatement ;
+- tous les membres doivent être au point du braquage avant la fin du délai ;
+- le staff clique sur **Tout le monde sur place** pour confirmer l'arrivée ;
+- si personne ne confirme avant la date limite, le bot ferme automatiquement le ticket et annule le braquage.
+
+Le contrôle d'arrivée est une confirmation Discord par le staff. Le bot ne peut pas vérifier automatiquement
+les positions FiveM sans intégration supplémentaire avec le serveur de jeu.

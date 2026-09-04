@@ -31,38 +31,42 @@ function safeName(value) {
     .slice(0, 60) || "user";
 }
 
-function ticketControls(claimedBy = null) {
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("ticket_claim")
-        .setLabel(claimedBy ? "Déjà pris" : "Prendre")
-        .setEmoji("🙋")
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(Boolean(claimedBy)),
-      new ButtonBuilder()
-        .setCustomId("ticket_unclaim")
-        .setLabel("Libérer")
-        .setEmoji("↩️")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(!claimedBy),
-      new ButtonBuilder()
-        .setCustomId("ticket_add_member")
-        .setLabel("Ajouter membre")
-        .setEmoji("➕")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("ticket_remove_member")
-        .setLabel("Retirer membre")
-        .setEmoji("➖")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId("ticket_close")
-        .setLabel("Fermer")
-        .setEmoji("🔒")
-        .setStyle(ButtonStyle.Danger)
-    )
+function ticketControls(claimedBy = null, ticketType = null, arrived = false) {
+  const buttons = [
+    new ButtonBuilder()
+      .setCustomId("ticket_claim")
+      .setLabel(claimedBy ? "Déjà pris" : "Prendre")
+      .setEmoji("🙋")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(Boolean(claimedBy)),
+    new ButtonBuilder()
+      .setCustomId("ticket_unclaim")
+      .setLabel("Libérer")
+      .setEmoji("↩️")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!claimedBy)
   ];
+
+  if (ticketType === "robbery") {
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId("robbery_arrived")
+        .setLabel(arrived ? "Arrivée confirmée" : "Tout le monde sur place")
+        .setEmoji("✅")
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(!claimedBy || arrived)
+    );
+  }
+
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId("ticket_close")
+      .setLabel("Fermer")
+      .setEmoji("🔒")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  return [new ActionRowBuilder().addComponents(...buttons)];
 }
 
 function memberHasAnyRole(member, roleIds) {
@@ -85,7 +89,7 @@ function canCloseTicket(member, ticket) {
   return member.id === ticket.owner_id || canManageTicket(member, ticket);
 }
 
-async function updateControlMessage(channel, claimedBy) {
+async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false) {
   const messages = await channel.messages.fetch({ limit: 30 });
   const controlMessage = messages.find(m =>
     m.author.id === channel.client.user.id &&
@@ -95,7 +99,7 @@ async function updateControlMessage(channel, claimedBy) {
   );
 
   if (controlMessage) {
-    await controlMessage.edit({ components: ticketControls(claimedBy) }).catch(() => {});
+    await controlMessage.edit({ components: ticketControls(claimedBy, ticketType, arrived) }).catch(() => {});
   }
 }
 
@@ -353,7 +357,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   await channel.send({
     content: `${interaction.user}${staffMentions ? ` ${staffMentions}` : ""}`,
     embeds: [embed],
-    components: ticketControls()
+    components: ticketControls(null, type.key)
   });
 
   await interaction.editReply(
@@ -532,7 +536,7 @@ async function createTicket(interaction, typeKey) {
   await channel.send({
     content: `${interaction.user}${staffMentions ? ` ${staffMentions}` : ""}`,
     embeds: [embed],
-    components: ticketControls()
+    components: ticketControls(null, "robbery")
   });
 
   await interaction.editReply(`✅ Ton ticket a été créé : ${channel}`);
@@ -554,7 +558,31 @@ async function claimTicket(interaction, ticket) {
   }
 
   const updated = await db.claimTicket(ticket.id, interaction.user.id);
-  await updateControlMessage(interaction.channel, updated.claimed_by);
+
+  if (ticket.ticket_type === "robbery") {
+    const deadline = new Date(Date.now() + 20 * 60 * 1000);
+    await db.setRobberyDeadline(ticket.id, deadline);
+    await updateControlMessage(interaction.channel, updated.claimed_by, "robbery", false);
+
+    const unix = Math.floor(deadline.getTime() / 1000);
+    const embed = new EmbedBuilder()
+      .setTitle("✅ Braquage accepté")
+      .setDescription([
+        `${interaction.user} a accepté la demande.`,
+        "",
+        `⏱️ **Tous les membres du gang/mafia doivent être au point du braquage dans les 20 minutes.**`,
+        `Date limite : <t:${unix}:R> (<t:${unix}:t>).`,
+        "",
+        "Une fois tout le monde sur place, un membre du staff doit cliquer sur **Tout le monde sur place**.",
+        "",
+        "❌ Si l'arrivée n'est pas confirmée avant la limite, le ticket sera fermé automatiquement et le braquage sera annulé."
+      ].join("\n"))
+      .setTimestamp();
+
+    return interaction.reply({ embeds: [embed] });
+  }
+
+  await updateControlMessage(interaction.channel, updated.claimed_by, ticket.ticket_type, false);
 
   const embed = new EmbedBuilder()
     .setDescription(`🙋 Ticket pris en charge par ${interaction.user}.`)
@@ -589,7 +617,7 @@ async function unclaimTicket(interaction, ticket) {
   }
 
   await db.unclaimTicket(ticket.id);
-  await updateControlMessage(interaction.channel, null);
+  await updateControlMessage(interaction.channel, null, ticket.ticket_type, Boolean(ticket.robbery_arrived_at));
   await interaction.reply(`↩️ ${interaction.user} a libéré le ticket.`);
 }
 
@@ -608,6 +636,55 @@ function memberModal(action) {
 
   modal.addComponents(new ActionRowBuilder().addComponents(input));
   return modal;
+}
+
+
+async function confirmRobberyArrived(interaction, ticket) {
+  if (ticket.ticket_type !== "robbery") {
+    return interaction.reply({ content: "❌ Ce ticket n'est pas un braquage.", ephemeral: true });
+  }
+
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({
+      content: "❌ Seul le staff autorisé peut confirmer l'arrivée.",
+      ephemeral: true
+    });
+  }
+
+  if (!ticket.claimed_by) {
+    return interaction.reply({
+      content: "❌ Le braquage doit d'abord être accepté avec le bouton **Prendre**.",
+      ephemeral: true
+    });
+  }
+
+  if (ticket.robbery_arrived_at) {
+    return interaction.reply({
+      content: "✅ L'arrivée a déjà été confirmée.",
+      ephemeral: true
+    });
+  }
+
+  if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() < Date.now()) {
+    return interaction.reply({
+      content: "❌ Le délai de 20 minutes est déjà dépassé.",
+      ephemeral: true
+    });
+  }
+
+  const updated = await db.markRobberyArrived(ticket.id);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true);
+
+  const embed = new EmbedBuilder()
+    .setTitle("✅ Équipe sur place")
+    .setDescription([
+      `${interaction.user} confirme que tous les membres sont au point du braquage.`,
+      "",
+      "Le délai de 20 minutes est validé. Le braquage peut continuer."
+    ].join("\n"))
+    .setTimestamp();
+
+  return interaction.reply({ embeds: [embed] });
 }
 
 function closeModal() {
@@ -748,5 +825,6 @@ module.exports = {
   ticketControls,
   showRobberyMenu,
   createRobberyTicket,
-  robberyRequestModal
+  robberyRequestModal,
+  confirmRobberyArrived
 };
