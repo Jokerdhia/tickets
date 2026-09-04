@@ -22,7 +22,8 @@ const {
   canManageTicket,
   canCloseTicket,
   showRobberyMenu,
-  createRobberyTicket
+  createRobberyTicket,
+  robberyRequestModal
 } = require("./tickets");
 
 const requiredEnv = [
@@ -130,11 +131,21 @@ client.on("interactionCreate", async interaction => {
 
     if (interaction.isStringSelectMenu()) {
       if (interaction.customId === "robbery_select") {
-        return await createRobberyTicket(interaction, interaction.values[0]);
+        return interaction.showModal(robberyRequestModal(interaction.values[0]));
       }
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith("robbery_request_modal:")) {
+        const robberyKey = interaction.customId.split(":")[1];
+
+        return await createRobberyTicket(interaction, robberyKey, {
+          groupName: interaction.fields.getTextInputValue("group_name"),
+          criminalCount: interaction.fields.getTextInputValue("criminal_count"),
+          guns: interaction.fields.getTextInputValue("guns")
+        });
+      }
+
       const ticket = await getCurrentTicket(interaction);
 
       if (!ticket || ticket.status !== "open") {

@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "2.0.0",
-  "description": "Bot Discord HMPD tickets avec demandes de braquage et quotas par opération",
+  "version": "3.0.0",
+  "description": "Bot Discord HMPD tickets braquage avec formulaire Gang/Mafia, nombre et armes",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

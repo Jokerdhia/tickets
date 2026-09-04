@@ -184,3 +184,14 @@ ROLE_ROBBERY_STAFF_IDS=
 ## Important après mise à jour
 
 La table Neon est migrée automatiquement : le bot ajoute la colonne `robbery_type` si elle n'existe pas.
+
+
+# V3 — Formulaire braquage
+
+Après le choix de l'opération, le bot ouvre un formulaire obligatoire avec uniquement :
+
+- Nom du gang ou de la mafia
+- Nombre de criminels
+- Modèle(s) d'arme
+
+Le ticket est créé après validation et affiche ces trois informations directement dans l'embed.

@@ -160,11 +160,67 @@ async function showRobberyMenu(interaction) {
   });
 }
 
-async function createRobberyTicket(interaction, robberyKey) {
+
+function robberyRequestModal(robberyKey) {
+  const robbery = robberyConfig.robberies[robberyKey];
+
+  const modal = new ModalBuilder()
+    .setCustomId(`robbery_request_modal:${robberyKey}`)
+    .setTitle(`Demande — ${robbery?.label || "Braquage"}`);
+
+  const groupName = new TextInputBuilder()
+    .setCustomId("group_name")
+    .setLabel("Nom du gang ou de la mafia")
+    .setPlaceholder("Exemple : Los Santos Cartel")
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(2)
+    .setMaxLength(80)
+    .setRequired(true);
+
+  const criminalCount = new TextInputBuilder()
+    .setCustomId("criminal_count")
+    .setLabel("Combien êtes-vous ?")
+    .setPlaceholder("Exemple : 4")
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(1)
+    .setMaxLength(2)
+    .setRequired(true);
+
+  const guns = new TextInputBuilder()
+    .setCustomId("guns")
+    .setLabel("Modèle(s) d'arme")
+    .setPlaceholder("Exemple : AP Pistol, Micro SMG")
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(2)
+    .setMaxLength(300)
+    .setRequired(true);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(groupName),
+    new ActionRowBuilder().addComponents(criminalCount),
+    new ActionRowBuilder().addComponents(guns)
+  );
+
+  return modal;
+}
+
+async function createRobberyTicket(interaction, robberyKey, formData) {
   const robbery = robberyConfig.robberies[robberyKey];
 
   if (!robbery) {
     return interaction.reply({ content: "❌ Opération inconnue.", ephemeral: true });
+  }
+
+  const groupName = formData?.groupName?.trim();
+  const criminalCountRaw = formData?.criminalCount?.trim();
+  const guns = formData?.guns?.trim();
+  const criminalCount = Number(criminalCountRaw);
+
+  if (!groupName || !guns || !Number.isInteger(criminalCount) || criminalCount < 1 || criminalCount > 20) {
+    return interaction.reply({
+      content: "❌ Formulaire invalide. Le nombre doit être compris entre 1 et 20.",
+      ephemeral: true
+    });
   }
 
   if (!robberyConfig.illegalRoleId || !interaction.member.roles.cache.has(robberyConfig.illegalRoleId)) {
@@ -280,16 +336,13 @@ async function createRobberyTicket(interaction, robberyKey) {
     .setDescription([
       `Demande créée par ${interaction.user}.`,
       "",
-      "Merci d'indiquer :",
-      "• le nombre de criminels ;",
-      "• les membres participants ;",
-      "• l'heure prévue ;",
-      "• toute information utile.",
-      "",
       "**Statut :** 🟢 Ouvert",
       "**Staff :** Non assigné"
     ].join("\n"))
     .addFields(
+      { name: "Gang / Mafia", value: groupName, inline: false },
+      { name: "Nombre de criminels", value: String(criminalCount), inline: true },
+      { name: "Modèle(s) d'arme", value: guns, inline: false },
       { name: "Opération", value: robbery.label, inline: true },
       { name: "Capacité", value: `${currentOpen + 1}/${robbery.maxOpen}`, inline: true },
       { name: "Ticket", value: `#${ticket.id}`, inline: true }
@@ -694,5 +747,6 @@ module.exports = {
   canCloseTicket,
   ticketControls,
   showRobberyMenu,
-  createRobberyTicket
+  createRobberyTicket,
+  robberyRequestModal
 };
