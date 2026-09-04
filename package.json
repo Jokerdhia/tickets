@@ -1,0 +1,19 @@
+{
+  "name": "hmpd-ticket-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord de tickets personnalisé HMPD avec Neon PostgreSQL et Render",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "14.27.0",
+    "dotenv": "16.6.1",
+    "pg": "8.23.0"
+  }
+}
