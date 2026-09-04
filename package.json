@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "4.0.0",
-  "description": "HMPD ticket bot - braquages avec délai de 20 minutes après acceptation police",
+  "version": "4.1.0",
+  "description": "HMPD ticket bot V4.1 - correction création ticket braquage",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

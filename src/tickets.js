@@ -357,7 +357,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   await channel.send({
     content: `${interaction.user}${staffMentions ? ` ${staffMentions}` : ""}`,
     embeds: [embed],
-    components: ticketControls(null, type.key)
+    components: ticketControls(null, "robbery")
   });
 
   await interaction.editReply(
