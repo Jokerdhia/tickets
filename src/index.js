@@ -20,7 +20,9 @@ const {
   executeClose,
   getCurrentTicket,
   canManageTicket,
-  canCloseTicket
+  canCloseTicket,
+  showRobberyMenu,
+  createRobberyTicket
 } = require("./tickets");
 
 const requiredEnv = [
@@ -74,6 +76,10 @@ client.on("interactionCreate", async interaction => {
         return await createTicket(interaction, typeKey);
       }
 
+      if (interaction.customId === "ticket_robbery") {
+        return await showRobberyMenu(interaction);
+      }
+
       const ticket = await getCurrentTicket(interaction);
 
       if (!ticket || ticket.status !== "open") {
@@ -119,6 +125,12 @@ client.on("interactionCreate", async interaction => {
           });
         }
         return interaction.showModal(closeModal());
+      }
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === "robbery_select") {
+        return await createRobberyTicket(interaction, interaction.values[0]);
       }
     }
 

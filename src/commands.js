@@ -6,7 +6,8 @@ const {
 
 const {
   panelAdminRoleIds,
-  ticketTypes
+  ticketTypes,
+  robberyConfig
 } = require("./config");
 
 const db = require("./db");
@@ -74,11 +75,13 @@ async function handleCommand(interaction) {
       });
     }
 
-    const type = ticketTypes[ticket.ticket_type];
+    const type = ticket.ticket_type === "robbery" ? null : ticketTypes[ticket.ticket_type];
     const embed = new EmbedBuilder()
       .setTitle(`🎫 Ticket #${ticket.id}`)
       .addFields(
-        { name: "Type", value: type?.label || ticket.ticket_type, inline: true },
+        { name: "Type", value: ticket.ticket_type === "robbery"
+          ? `Braquage — ${robberyConfig.robberies[ticket.robbery_type]?.label || ticket.robbery_type}`
+          : (type?.label || ticket.ticket_type), inline: true },
         { name: "Statut", value: ticket.status, inline: true },
         { name: "Propriétaire", value: `<@${ticket.owner_id}>`, inline: true },
         { name: "Pris par", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Non assigné", inline: true },

@@ -48,8 +48,62 @@ const ticketTypes = {
   }
 };
 
+
+const robberies = {
+  bobcat: {
+    key: "bobcat",
+    label: "Bobcat",
+    emoji: "🏗️",
+    maxOpen: 3
+  },
+  train: {
+    key: "train",
+    label: "Train",
+    emoji: "🚂",
+    maxOpen: 2
+  },
+  yacht: {
+    key: "yacht",
+    label: "Yacht",
+    emoji: "🛥️",
+    maxOpen: 2
+  },
+  labo: {
+    key: "labo",
+    label: "Labo",
+    emoji: "🧪",
+    maxOpen: 2
+  },
+  central_bank: {
+    key: "central_bank",
+    label: "Banque centrale",
+    emoji: "🏛️",
+    maxOpen: 2
+  },
+  cargo: {
+    key: "cargo",
+    label: "Cargo",
+    emoji: "✈️",
+    maxOpen: 2
+  },
+  submarine: {
+    key: "submarine",
+    label: "Submarine",
+    emoji: "🌊",
+    maxOpen: 1
+  }
+};
+
+const robberyConfig = {
+  illegalRoleId: process.env.ROLE_ILLEGAL_ID || "",
+  categoryId: process.env.CATEGORY_ROBBERY_ID || "",
+  staffRoleIds: csv(process.env.ROLE_ROBBERY_STAFF_IDS),
+  robberies
+};
+
 module.exports = {
   ticketTypes,
   panelAdminRoleIds: csv(process.env.PANEL_ADMIN_ROLE_IDS),
-  logChannelId: process.env.TICKET_LOG_CHANNEL_ID
+  logChannelId: process.env.TICKET_LOG_CHANNEL_ID,
+  robberyConfig
 };

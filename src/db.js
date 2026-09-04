@@ -19,6 +19,7 @@ async function initDb() {
       channel_id TEXT UNIQUE,
       owner_id TEXT NOT NULL,
       ticket_type TEXT NOT NULL,
+      robbery_type TEXT,
       status TEXT NOT NULL DEFAULT 'open',
       claimed_by TEXT,
       close_reason TEXT,
@@ -28,6 +29,8 @@ async function initDb() {
       closed_at TIMESTAMPTZ
     );
   `);
+
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_type TEXT;`);
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tickets_owner_status
@@ -47,12 +50,12 @@ async function initDb() {
   console.log("✅ Base Neon PostgreSQL prête.");
 }
 
-async function createTicket({ guildId, channelId, ownerId, ticketType }) {
+async function createTicket({ guildId, channelId, ownerId, ticketType, robberyType = null }) {
   const { rows } = await pool.query(
-    `INSERT INTO tickets (guild_id, channel_id, owner_id, ticket_type)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO tickets (guild_id, channel_id, owner_id, ticket_type, robbery_type)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [guildId, channelId, ownerId, ticketType]
+    [guildId, channelId, ownerId, ticketType, robberyType]
   );
   return rows[0];
 }
@@ -132,6 +135,34 @@ async function removeTicketMember(ticketId, userId) {
   );
 }
 
+
+async function countOpenRobberyTickets(guildId, robberyType) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM tickets
+     WHERE guild_id = $1
+       AND ticket_type = 'robbery'
+       AND robbery_type = $2
+       AND status = 'open'`,
+    [guildId, robberyType]
+  );
+  return rows[0]?.count || 0;
+}
+
+async function getOpenRobberyTicketForUser(guildId, ownerId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets
+     WHERE guild_id = $1
+       AND owner_id = $2
+       AND ticket_type = 'robbery'
+       AND status = 'open'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [guildId, ownerId]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   pool,
   initDb,
@@ -142,5 +173,7 @@ module.exports = {
   unclaimTicket,
   closeTicket,
   addTicketMember,
-  removeTicketMember
+  removeTicketMember,
+  countOpenRobberyTickets,
+  getOpenRobberyTicketForUser
 };

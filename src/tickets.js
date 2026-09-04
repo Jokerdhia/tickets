@@ -6,13 +6,15 @@ const {
   EmbedBuilder,
   ModalBuilder,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle
 } = require("discord.js");
 
 const {
   ticketTypes,
-  logChannelId
+  logChannelId,
+  robberyConfig
 } = require("./config");
 
 const db = require("./db");
@@ -69,10 +71,13 @@ function memberHasAnyRole(member, roleIds) {
 }
 
 function canManageTicket(member, ticket) {
-  const type = ticketTypes[ticket.ticket_type];
+  const roleIds = ticket.ticket_type === "robbery"
+    ? robberyConfig.staffRoleIds
+    : (ticketTypes[ticket.ticket_type]?.staffRoleIds || []);
+
   return Boolean(
     member.permissions.has(PermissionFlagsBits.Administrator) ||
-    memberHasAnyRole(member, type?.staffRoleIds || [])
+    memberHasAnyRole(member, roleIds)
   );
 }
 
@@ -94,6 +99,216 @@ async function updateControlMessage(channel, claimedBy) {
   }
 }
 
+
+function robberySelectMenu() {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("robbery_select")
+    .setPlaceholder("Choisis l'opération à demander")
+    .setMinValues(1)
+    .setMaxValues(1);
+
+  for (const robbery of Object.values(robberyConfig.robberies)) {
+    menu.addOptions({
+      label: robbery.label,
+      value: robbery.key,
+      emoji: robbery.emoji,
+      description: `Maximum ${robbery.maxOpen} demande(s) ouverte(s)`
+    });
+  }
+
+  return new ActionRowBuilder().addComponents(menu);
+}
+
+async function showRobberyMenu(interaction) {
+  if (!robberyConfig.illegalRoleId) {
+    return interaction.reply({
+      content: "❌ ROLE_ILLEGAL_ID n'est pas configuré.",
+      ephemeral: true
+    });
+  }
+
+  if (!interaction.member.roles.cache.has(robberyConfig.illegalRoleId)) {
+    return interaction.reply({
+      content: "❌ Ce menu est réservé aux membres ayant le rôle **Illegal**.",
+      ephemeral: true
+    });
+  }
+
+  const lines = [];
+  for (const robbery of Object.values(robberyConfig.robberies)) {
+    const current = await db.countOpenRobberyTickets(interaction.guildId, robbery.key);
+    const icon = current >= robbery.maxOpen ? "🔴" : current === 0 ? "🟢" : "🟠";
+    lines.push(`${icon} **${robbery.label}** — ${current}/${robbery.maxOpen}`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("🔫 Demande de braquage")
+    .setDescription([
+      "Choisis l'opération que tu veux demander.",
+      "",
+      ...lines,
+      "",
+      "🔴 = complet • 🟠 = places restantes • 🟢 = disponible"
+    ].join("\n"))
+    .setFooter({ text: "HMPD • Illegal Operations" })
+    .setTimestamp();
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [robberySelectMenu()],
+    ephemeral: true
+  });
+}
+
+async function createRobberyTicket(interaction, robberyKey) {
+  const robbery = robberyConfig.robberies[robberyKey];
+
+  if (!robbery) {
+    return interaction.reply({ content: "❌ Opération inconnue.", ephemeral: true });
+  }
+
+  if (!robberyConfig.illegalRoleId || !interaction.member.roles.cache.has(robberyConfig.illegalRoleId)) {
+    return interaction.reply({
+      content: "❌ Tu dois avoir le rôle **Illegal** pour ouvrir une demande de braquage.",
+      ephemeral: true
+    });
+  }
+
+  if (!robberyConfig.categoryId) {
+    return interaction.reply({
+      content: "❌ CATEGORY_ROBBERY_ID n'est pas configuré.",
+      ephemeral: true
+    });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  const existingUserTicket = await db.getOpenRobberyTicketForUser(
+    interaction.guildId,
+    interaction.user.id
+  );
+
+  if (existingUserTicket) {
+    const existingChannel = interaction.guild.channels.cache.get(existingUserTicket.channel_id);
+    if (existingChannel) {
+      return interaction.editReply(
+        `❌ Tu as déjà une demande de braquage ouverte : ${existingChannel}`
+      );
+    }
+    await db.closeTicket(existingUserTicket.id, interaction.client.user.id, "Salon Discord introuvable.");
+  }
+
+  // Recompte juste avant création pour éviter de dépasser le quota.
+  const currentOpen = await db.countOpenRobberyTickets(interaction.guildId, robbery.key);
+
+  if (currentOpen >= robbery.maxOpen) {
+    return interaction.editReply(
+      `❌ **${robbery.label} est actuellement complet.**\n` +
+      `Il y a déjà **${currentOpen}/${robbery.maxOpen}** demandes en cours.\n` +
+      `Choisis une autre opération.`
+    );
+  }
+
+  const overwrites = [
+    {
+      id: interaction.guild.roles.everyone.id,
+      deny: [PermissionFlagsBits.ViewChannel]
+    },
+    {
+      id: interaction.user.id,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks
+      ]
+    },
+    {
+      id: interaction.client.user.id,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageRoles,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks
+      ]
+    }
+  ];
+
+  for (const roleId of robberyConfig.staffRoleIds) {
+    overwrites.push({
+      id: roleId,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks
+      ]
+    });
+  }
+
+  const channel = await interaction.guild.channels.create({
+    name: `braquage-${robbery.key}-${safeName(interaction.user.username)}`.slice(0, 90),
+    type: ChannelType.GuildText,
+    parent: robberyConfig.categoryId,
+    topic: `HMPD Robbery | owner=${interaction.user.id} | robbery=${robbery.key}`,
+    permissionOverwrites: overwrites
+  });
+
+  let ticket;
+  try {
+    ticket = await db.createTicket({
+      guildId: interaction.guildId,
+      channelId: channel.id,
+      ownerId: interaction.user.id,
+      ticketType: "robbery",
+      robberyType: robbery.key
+    });
+  } catch (error) {
+    await channel.delete("Erreur création ticket braquage en DB").catch(() => {});
+    throw error;
+  }
+
+  const staffMentions = robberyConfig.staffRoleIds.map(id => `<@&${id}>`).join(" ");
+
+  const embed = new EmbedBuilder()
+    .setTitle(`${robbery.emoji} Braquage #${ticket.id} — ${robbery.label}`)
+    .setDescription([
+      `Demande créée par ${interaction.user}.`,
+      "",
+      "Merci d'indiquer :",
+      "• le nombre de criminels ;",
+      "• les membres participants ;",
+      "• l'heure prévue ;",
+      "• toute information utile.",
+      "",
+      "**Statut :** 🟢 Ouvert",
+      "**Staff :** Non assigné"
+    ].join("\n"))
+    .addFields(
+      { name: "Opération", value: robbery.label, inline: true },
+      { name: "Capacité", value: `${currentOpen + 1}/${robbery.maxOpen}`, inline: true },
+      { name: "Ticket", value: `#${ticket.id}`, inline: true }
+    )
+    .setFooter({ text: "HMPD • Illegal Operations" })
+    .setTimestamp();
+
+  await channel.send({
+    content: `${interaction.user}${staffMentions ? ` ${staffMentions}` : ""}`,
+    embeds: [embed],
+    components: ticketControls()
+  });
+
+  await interaction.editReply(
+    `✅ Ta demande **${robbery.label}** a été créée : ${channel}\n` +
+    `Occupation actuelle : **${currentOpen + 1}/${robbery.maxOpen}**`
+  );
+}
+
 function createPanelEmbed() {
   return new EmbedBuilder()
     .setTitle("🎫 HMPD SUPPORT")
@@ -101,6 +316,7 @@ function createPanelEmbed() {
       [
         "Besoin d'aide ? Sélectionne le type de ticket correspondant à ta demande.",
         "",
+        "🔫 **Braquage / Illegal** — Demander une opération",
         "🛠️ **Support** — Aide générale",
         "🚓 **Police / HMPD** — Demande liée à la police",
         "⚠️ **Réclamation** — Signaler une situation",
@@ -130,7 +346,15 @@ function createPanelRows() {
     else second.addComponents(button);
   });
 
-  return [first, second];
+  const robberyRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("ticket_robbery")
+      .setLabel("Demande de braquage")
+      .setEmoji("🔫")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  return [robberyRow, first, second];
 }
 
 async function createTicket(interaction, typeKey) {
@@ -426,7 +650,9 @@ async function executeClose(interaction, ticket, reason) {
       .setTitle(`🔒 Ticket #${ticket.id} fermé`)
       .addFields(
         { name: "Propriétaire", value: `<@${ticket.owner_id}>`, inline: true },
-        { name: "Type", value: ticketTypes[ticket.ticket_type]?.label || ticket.ticket_type, inline: true },
+        { name: "Type", value: ticket.ticket_type === "robbery"
+          ? `Braquage — ${robberyConfig.robberies[ticket.robbery_type]?.label || ticket.robbery_type}`
+          : (ticketTypes[ticket.ticket_type]?.label || ticket.ticket_type), inline: true },
         { name: "Fermé par", value: `${interaction.user}`, inline: true },
         { name: "Pris par", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Non assigné", inline: true },
         { name: "Salon", value: `#${interaction.channel.name}`, inline: true },
@@ -466,5 +692,7 @@ module.exports = {
   getCurrentTicket,
   canManageTicket,
   canCloseTicket,
-  ticketControls
+  ticketControls,
+  showRobberyMenu,
+  createRobberyTicket
 };

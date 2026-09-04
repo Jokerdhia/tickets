@@ -145,3 +145,42 @@ Ferme le ticket avec un motif.
 ## Sécurité
 
 Ne mets jamais ton token Discord ni `DATABASE_URL` dans GitHub. Utilise `.env` en local et les variables Render en production.
+
+
+# V2 — Tickets Illegal / Braquages
+
+La V2 ajoute un bouton **Demande de braquage** réservé au rôle `Illegal`.
+
+Le joueur choisit ensuite son opération dans un menu :
+
+| Opération | Maximum de tickets ouverts |
+| --- | ---: |
+| Bobcat | 3 |
+| Train | 2 |
+| Yacht | 2 |
+| Labo | 2 |
+| Banque centrale | 2 |
+| Cargo | 2 |
+| Submarine | 1 |
+
+Le bot compte les tickets ouverts dans Neon avant chaque création.
+
+Exemple : si Banque centrale est à **2/2**, une troisième demande est refusée avec un message indiquant de choisir une autre opération. Dès qu'un ticket Banque centrale est fermé, la capacité repasse automatiquement à **1/2**.
+
+## Variables supplémentaires
+
+```env
+ROLE_ILLEGAL_ID=
+CATEGORY_ROBBERY_ID=
+ROLE_ROBBERY_STAFF_IDS=
+```
+
+`ROLE_ILLEGAL_ID` : rôle Discord obligatoire pour ouvrir un braquage.
+
+`CATEGORY_ROBBERY_ID` : catégorie Discord qui contiendra les salons de braquage.
+
+`ROLE_ROBBERY_STAFF_IDS` : rôle(s) staff autorisé(s) à voir, prendre et gérer ces tickets. Plusieurs IDs peuvent être séparés par des virgules.
+
+## Important après mise à jour
+
+La table Neon est migrée automatiquement : le bot ajoute la colonne `robbery_type` si elle n'existe pas.
