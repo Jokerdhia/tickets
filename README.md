@@ -310,3 +310,33 @@ Limites configurées :
 | Bobcat | non défini |
 
 Les quotas de tickets simultanés restent ceux de la version précédente.
+
+
+# V6.1 — Professional UI
+
+Changes:
+
+- Bobcat maximum participants: **4**
+- All Discord **button labels are in English**
+- Main messages and instructions remain professional Arabic
+- Robbery workflow remains:
+  - Claim
+  - Approve / Reject
+  - 20-minute arrival deadline
+  - 10-minute and 5-minute reminders
+  - All On Site confirmation
+  - Auto-cancel on timeout
+- One active robbery maximum per gang / mafia
+- Participant limits enforced automatically
+
+Participant limits:
+
+| Operation | Max participants |
+| --- | ---: |
+| Bobcat | 4 |
+| Train | 6 |
+| Yacht | 6 |
+| Labo | 6 |
+| Pacific Bank | 8 |
+| Cargo | 12 |
+| Submarine | 15 |

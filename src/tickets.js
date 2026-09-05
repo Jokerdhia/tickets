@@ -37,19 +37,19 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_claim")
-          .setLabel(claimedBy ? "تم الاستلام" : "استلام")
+          .setLabel(claimedBy ? "Claimed" : "Claim")
           .setEmoji("🙋")
           .setStyle(ButtonStyle.Success)
           .setDisabled(Boolean(claimedBy)),
         new ButtonBuilder()
           .setCustomId("ticket_unclaim")
-          .setLabel("إلغاء الاستلام")
+          .setLabel("Release")
           .setEmoji("↩️")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(!claimedBy),
         new ButtonBuilder()
           .setCustomId("ticket_close")
-          .setLabel("إغلاق")
+          .setLabel("Close")
           .setEmoji("🔒")
           .setStyle(ButtonStyle.Danger)
       )
@@ -62,13 +62,13 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_claim")
-      .setLabel(claimedBy ? "تم الاستلام" : "استلام")
+      .setLabel(claimedBy ? "Claimed" : "Claim")
       .setEmoji("🙋")
       .setStyle(ButtonStyle.Success)
       .setDisabled(Boolean(claimedBy) || refused),
     new ButtonBuilder()
       .setCustomId("ticket_unclaim")
-      .setLabel("إلغاء الاستلام")
+      .setLabel("Release")
       .setEmoji("↩️")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!claimedBy || accepted || refused)
@@ -77,25 +77,25 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("robbery_accept")
-      .setLabel("قبول العملية")
+      .setLabel("Approve")
       .setEmoji("✅")
       .setStyle(ButtonStyle.Success)
       .setDisabled(!claimedBy || accepted || refused),
     new ButtonBuilder()
       .setCustomId("robbery_refuse")
-      .setLabel("رفض العملية")
+      .setLabel("Reject")
       .setEmoji("❌")
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!claimedBy || accepted || refused),
     new ButtonBuilder()
       .setCustomId("robbery_arrived")
-      .setLabel(arrived ? "تم تأكيد الوصول" : "الجميع في الموقع")
+      .setLabel(arrived ? "Arrival Confirmed" : "All On Site")
       .setEmoji("📍")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(!accepted || arrived),
     new ButtonBuilder()
       .setCustomId("ticket_close")
-      .setLabel("إغلاق")
+      .setLabel("Close")
       .setEmoji("🔒")
       .setStyle(ButtonStyle.Secondary)
   );
@@ -189,6 +189,7 @@ async function showRobberyMenu(interaction) {
       "",
       "🔴 = مكتمل • 🟠 = أماكن متبقية • 🟢 = متاح"
     ].join("\n"))
+    .addFields({ name: "سياسة الطلب", value: "• عملية واحدة نشطة لكل عصابة / مافيا\n• الالتزام بالعدد الأقصى للمشاركين\n• بعد الموافقة: 20 دقيقة للوصول إلى الموقع", inline: false })
     .setFooter({ text: "HMPD • Illegal Operations" })
     .setTimestamp();
 
@@ -392,7 +393,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   const staffMentions = robberyConfig.staffRoleIds.map(id => `<@&${id}>`).join(" ");
 
   const embed = new EmbedBuilder()
-    .setTitle(`${robbery.emoji} طلب سطو #${ticket.id} — ${robbery.label}`)
+    .setTitle(`${robbery.emoji} Robbery Request #${ticket.id} — ${robbery.label}`)
     .setDescription([
       `تم إنشاء الطلب بواسطة ${interaction.user}.`,
       "",
@@ -405,7 +406,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
       { name: "نوع / موديل السلاح", value: guns, inline: false },
       { name: "العملية", value: robbery.label, inline: true },
       { name: "السعة", value: `${currentOpen + 1}/${robbery.maxOpen}`, inline: true },
-      { name: "الحد الأقصى للأفراد", value: robbery.maxCriminals ? String(robbery.maxCriminals) : "غير محدد", inline: true },
+      { name: "الحد الأقصى للمشاركين", value: robbery.maxCriminals ? String(robbery.maxCriminals) : "غير محدد", inline: true },
       { name: "التذكرة", value: `#${ticket.id}`, inline: true }
     )
     .setFooter({ text: "HMPD • Illegal Operations" })
@@ -439,19 +440,19 @@ function deleteEphemeralReplyAfter(interaction, delayMs = 60_000) {
 
 function createPanelEmbed() {
   return new EmbedBuilder()
-    .setTitle("🎫 نظام تذاكر HMPD")
+    .setTitle("🎫 HMPD • نظام التذاكر الرسمي")
     .setDescription(
       [
         "مرحباً بك في نظام التذاكر الرسمي لـ **HMPD**.",
-        "يرجى اختيار نوع الطلب المناسب من الأزرار أدناه.",
+        "اختر القسم المناسب لطلبك من الأزرار أدناه.",
         "",
-        "🔫 **طلب عملية سطو** — مخصص لأعضاء Illegal فقط",
-        "🏎️ **Racer / Speed Unit** — مخصص للأعضاء المصرح لهم",
-        "🚓 **Police / HMPD** — مخصص لأعضاء الشرطة المصرح لهم",
-        "⚠️ **شكوى ضد الشرطة** — مخصص للمواطنين المصرح لهم",
+        "🔫 **Robbery Request** — طلب عملية لأعضاء Illegal المصرح لهم",
+        "🏎️ **Racer / Speed Unit** — طلبات Racer و Speed Unit",
+        "🚓 **Police / HMPD** — الطلبات الداخلية الخاصة بالشرطة",
+        "⚠️ **Police Complaint** — شكاوى المواطنين ضد الشرطة",
         "",
-        "🔐 يتم التحقق من صلاحية الرتبة تلقائياً قبل إنشاء التذكرة.",
-        "📌 يرجى عدم فتح تذاكر غير ضرورية أو مكررة."
+        "🔐 يتم التحقق من صلاحيات الرتبة تلقائياً.",
+        "📌 يمنع فتح تذاكر مكررة أو غير ضرورية."
       ].join("\n")
     )
     .setFooter({ text: "HMPD • Official Ticket System" })
@@ -462,7 +463,7 @@ function createPanelRows() {
   const robberyRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_robbery")
-      .setLabel("طلب سطو")
+      .setLabel("Robbery Request")
       .setEmoji("🔫")
       .setStyle(ButtonStyle.Danger)
   );
@@ -480,7 +481,7 @@ function createPanelRows() {
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("ticket_create:complaint")
-      .setLabel("شكوى ضد الشرطة")
+      .setLabel("Police Complaint")
       .setEmoji("⚠️")
       .setStyle(ButtonStyle.Danger)
   );
@@ -621,8 +622,8 @@ async function createTicket(interaction, typeKey) {
         "يرجى شرح طلبك بوضوح وبأكبر قدر ممكن من التفاصيل.",
         "سيقوم أحد أعضاء الطاقم المختص باستلام التذكرة في أقرب وقت.",
         "",
-        `**الحالة:** 🟢 مفتوحة`,
-        `**المسؤول:** غير معيّن`
+        `**الحالة:** 🟡 بانتظار مراجعة الشرطة`,
+        `**المسؤول:** لم يتم الاستلام بعد`
       ].join("\n")
     )
     .addFields(
@@ -727,7 +728,7 @@ function memberModal(action) {
 function robberyRefuseModal() {
   const modal = new ModalBuilder()
     .setCustomId("robbery_refuse_modal")
-    .setTitle("رفض طلب السطو");
+    .setTitle("Reject Robbery Request");
 
   const reason = new TextInputBuilder()
     .setCustomId("refusal_reason")
@@ -769,7 +770,7 @@ async function acceptRobbery(interaction, ticket) {
 
   const unix = Math.floor(deadline.getTime() / 1000);
   const embed = new EmbedBuilder()
-    .setTitle("✅ تم قبول طلب السطو")
+    .setTitle("✅ Robbery Approved")
     .setDescription([
       `تم قبول العملية بواسطة ${interaction.user}.`,
       "",
@@ -809,7 +810,7 @@ async function refuseRobbery(interaction, ticket, reason) {
   await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "refused");
 
   const embed = new EmbedBuilder()
-    .setTitle("❌ تم رفض طلب السطو")
+    .setTitle("❌ Robbery Rejected")
     .setDescription([
       `تم رفض الطلب بواسطة ${interaction.user}.`,
       "",
@@ -881,7 +882,7 @@ async function confirmRobberyArrived(interaction, ticket) {
   await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted");
 
   const embed = new EmbedBuilder()
-    .setTitle("✅ تم تأكيد وصول الفريق")
+    .setTitle("✅ Arrival Confirmed")
     .setDescription([
       `${interaction.user} أكد أن جميع الأعضاء متواجدون في موقع العملية.`,
       "",

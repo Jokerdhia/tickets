@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "6.0.0",
-  "description": "HMPD Ticket Bot V6 - workflow professionnel braquages, règles, cooldown gang, rappels et logs",
+  "version": "6.1.0",
+  "description": "HMPD Ticket Bot V6.1 - professional Arabic UI with English-only buttons",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

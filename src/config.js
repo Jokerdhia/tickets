@@ -41,7 +41,7 @@ const robberies = {
     label: "Bobcat",
     emoji: "🏗️",
     maxOpen: 3,
-    maxCriminals: null
+    maxCriminals: 4
   },
   train: {
     key: "train",
