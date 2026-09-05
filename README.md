@@ -232,3 +232,37 @@ ROLE_RACER_IDS=
 
 `CATEGORY_RACER_ID` = catégorie Discord où les tickets Racer seront créés.  
 `ROLE_RACER_IDS` = rôle(s) staff pouvant voir et gérer ces tickets, séparés par des virgules si nécessaire.
+
+
+# V5 — Accès par rôle pour chaque bouton
+
+Le panneau contient uniquement :
+
+- 🔫 Demande de braquage
+- 🏎️ Racer / Speed Unit
+- 🚓 Police / HMPD
+- ⚠️ Réclamation Police
+
+Le bouton Braquage reste contrôlé par `ROLE_ILLEGAL_ID`.
+
+Les trois autres boutons ont maintenant des rôles d'accès séparés des rôles staff :
+
+```env
+ROLE_RACER_ACCESS_IDS=
+ROLE_POLICE_ACCESS_IDS=
+ROLE_COMPLAINT_ACCESS_IDS=
+```
+
+Les variables `*_ACCESS_IDS` indiquent **qui peut ouvrir** le ticket.
+
+Les variables existantes `ROLE_RACER_IDS`, `ROLE_POLICE_IDS` et `ROLE_COMPLAINT_IDS` indiquent **quel staff peut voir et gérer** le ticket.
+
+Plusieurs rôles peuvent être fournis avec des virgules :
+
+```env
+ROLE_POLICE_ACCESS_IDS=111111111111111111,222222222222222222
+```
+
+Un administrateur Discord peut toujours ouvrir les tickets pour les tests.
+
+Si un utilisateur n'a pas le rôle requis, aucun salon n'est créé et le bot lui répond avec un message privé.

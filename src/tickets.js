@@ -371,17 +371,17 @@ function createPanelEmbed() {
     .setTitle("🎫 HMPD TICKETS")
     .setDescription(
       [
-        "Sélectionne le type de ticket correspondant à ta demande.",
+        "Choisis le service correspondant à ta demande.",
         "",
-        "🔫 **Braquage / Illegal** — Demander une opération",
-        "🏎️ **Racer / Speed Unit** — Demande liée aux racers / Speed Unit",
-        "🚓 **Police / HMPD** — Demande liée à la police",
-        "⚠️ **Réclamation** — Signaler une situation",
+        "🔫 **Braquage / Illegal** — réservé aux membres Illegal",
+        "🏎️ **Racer / Speed Unit** — réservé aux rôles Racer autorisés",
+        "🚓 **Police / HMPD** — réservé aux rôles Police autorisés",
+        "⚠️ **Réclamation Police** — réservé aux rôles Citizen autorisés",
         "",
-        "Un salon privé sera créé automatiquement."
+        "🔐 Chaque bouton vérifie automatiquement ton rôle avant de créer un ticket."
       ].join("\n")
     )
-    .setFooter({ text: "HMPD • Système de tickets" })
+    .setFooter({ text: "HMPD • Accès contrôlé par rôles" })
     .setTimestamp();
 }
 
@@ -407,7 +407,7 @@ function createPanelRows() {
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("ticket_create:complaint")
-      .setLabel("Réclamation")
+      .setLabel("Réclamation Police")
       .setEmoji("⚠️")
       .setStyle(ButtonStyle.Danger)
   );
@@ -415,11 +415,37 @@ function createPanelRows() {
   return [robberyRow, mainRow];
 }
 
+
+function getMissingAccessMessage(type) {
+  if (!type?.accessRoleIds?.length) {
+    return `❌ L'accès **${type?.label || "à ce ticket"}** n'est pas encore configuré par l'administration.`;
+  }
+
+  return [
+    `❌ Tu n'as pas le rôle requis pour ouvrir **${type.label}**.`,
+    "",
+    "Si tu penses que c'est une erreur, contacte un responsable."
+  ].join("\n");
+}
+
+function canOpenTicket(member, type) {
+  if (!member || !type) return false;
+  if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  return memberHasAnyRole(member, type.accessRoleIds || []);
+}
+
 async function createTicket(interaction, typeKey) {
   const type = ticketTypes[typeKey];
 
   if (!type) {
     return interaction.reply({ content: "❌ Type de ticket inconnu.", ephemeral: true });
+  }
+
+  if (!canOpenTicket(interaction.member, type)) {
+    return interaction.reply({
+      content: getMissingAccessMessage(type),
+      ephemeral: true
+    });
   }
 
   if (!type.categoryId) {

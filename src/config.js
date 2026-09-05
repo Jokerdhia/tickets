@@ -6,56 +6,34 @@ function csv(value) {
 }
 
 const ticketTypes = {
-  support: {
-    key: "support",
-    label: "Support",
-    emoji: "🛠️",
-    description: "Aide générale ou problème avec le serveur",
-    categoryId: process.env.CATEGORY_SUPPORT_ID,
-    staffRoleIds: csv(process.env.ROLE_SUPPORT_IDS)
-  },
-  police: {
-    key: "police",
-    label: "Police / HMPD",
-    emoji: "🚓",
-    description: "Demande liée à la police ou au HMPD",
-    categoryId: process.env.CATEGORY_POLICE_ID,
-    staffRoleIds: csv(process.env.ROLE_POLICE_IDS)
-  },
-  complaint: {
-    key: "complaint",
-    label: "Réclamation",
-    emoji: "⚠️",
-    description: "Réclamation concernant une situation ou un membre",
-    categoryId: process.env.CATEGORY_COMPLAINT_ID,
-    staffRoleIds: csv(process.env.ROLE_COMPLAINT_IDS)
-  },
-  bug: {
-    key: "bug",
-    label: "Bug",
-    emoji: "🐛",
-    description: "Signaler un bug ou un problème technique",
-    categoryId: process.env.CATEGORY_BUG_ID,
-    staffRoleIds: csv(process.env.ROLE_BUG_IDS)
-  },
   racer: {
     key: "racer",
     label: "Racer / Speed Unit",
     emoji: "🏎️",
     description: "Demande liée aux racers ou à la Speed Unit",
     categoryId: process.env.CATEGORY_RACER_ID,
-    staffRoleIds: csv(process.env.ROLE_RACER_IDS)
+    staffRoleIds: csv(process.env.ROLE_RACER_IDS),
+    accessRoleIds: csv(process.env.ROLE_RACER_ACCESS_IDS)
   },
-  admin: {
-    key: "admin",
-    label: "Administration",
-    emoji: "🛡️",
-    description: "Demande nécessitant l'administration",
-    categoryId: process.env.CATEGORY_ADMIN_ID,
-    staffRoleIds: csv(process.env.ROLE_ADMIN_IDS)
+  police: {
+    key: "police",
+    label: "Police / HMPD",
+    emoji: "🚓",
+    description: "Demande interne liée à la police",
+    categoryId: process.env.CATEGORY_POLICE_ID,
+    staffRoleIds: csv(process.env.ROLE_POLICE_IDS),
+    accessRoleIds: csv(process.env.ROLE_POLICE_ACCESS_IDS)
+  },
+  complaint: {
+    key: "complaint",
+    label: "Réclamation Police",
+    emoji: "⚠️",
+    description: "Réclamation d'un citoyen concernant la police",
+    categoryId: process.env.CATEGORY_COMPLAINT_ID,
+    staffRoleIds: csv(process.env.ROLE_COMPLAINT_IDS),
+    accessRoleIds: csv(process.env.ROLE_COMPLAINT_ACCESS_IDS)
   }
 };
-
 
 const robberies = {
   bobcat: {

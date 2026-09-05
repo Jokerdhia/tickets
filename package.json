@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "4.3.0",
-  "description": "HMPD ticket bot V4.3 - panneau sans Support, Bug ni Administration",
+  "version": "5.0.0",
+  "description": "HMPD Ticket Bot V5 - accès par rôle pour chaque bouton",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
