@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "6.2.0",
-  "description": "HMPD Ticket Bot V6.2 - Speed Hunters",
+  "version": "7.0.0",
+  "description": "HMPD Ticket Bot V7 Command Center - professional Discord ticket automation without dashboard",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

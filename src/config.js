@@ -94,9 +94,16 @@ const robberyConfig = {
   robberies
 };
 
+const supervisorRoleIds = csv(process.env.TICKET_SUPERVISOR_ROLE_IDS);
+const robberyCooldownMinutes = Number(process.env.ROBBERY_COOLDOWN_MINUTES || 30);
+const unclaimedEscalationMinutes = Number(process.env.TICKET_ESCALATION_MINUTES || 10);
+
 module.exports = {
   ticketTypes,
   panelAdminRoleIds: csv(process.env.PANEL_ADMIN_ROLE_IDS),
   logChannelId: process.env.TICKET_LOG_CHANNEL_ID,
+  supervisorRoleIds,
+  robberyCooldownMinutes,
+  unclaimedEscalationMinutes,
   robberyConfig
 };

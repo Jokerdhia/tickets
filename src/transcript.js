@@ -43,8 +43,36 @@ async function buildTranscript(channel, ticket) {
       .map(a => `<div class="attachment">📎 <a href="${escapeHtml(a.url)}">${escapeHtml(a.name || "Pièce jointe")}</a></div>`)
       .join("");
 
-    const embeds = message.embeds.length
-      ? `<div class="embed-note">[${message.embeds.length} embed(s)]</div>`
+    const embeds = message.embeds.map((embed, index) => {
+      const fields = (embed.fields || []).map(field =>
+        `<div class="embed-field"><strong>${escapeHtml(field.name || "")}</strong><br>${escapeHtml(field.value || "").replaceAll("\n", "<br>")}</div>`
+      ).join("");
+
+      const image = embed.image?.url
+        ? `<div class="embed-media">🖼️ Image: <a href="${escapeHtml(embed.image.url)}">${escapeHtml(embed.image.url)}</a></div>`
+        : "";
+      const thumbnail = embed.thumbnail?.url
+        ? `<div class="embed-media">🖼️ Thumbnail: <a href="${escapeHtml(embed.thumbnail.url)}">${escapeHtml(embed.thumbnail.url)}</a></div>`
+        : "";
+
+      return `<div class="embed-box">
+        <div><strong>Embed ${index + 1}</strong></div>
+        ${embed.title ? `<div class="embed-title">${escapeHtml(embed.title)}</div>` : ""}
+        ${embed.description ? `<div>${escapeHtml(embed.description).replaceAll("\n", "<br>")}</div>` : ""}
+        ${embed.url ? `<div>🔗 <a href="${escapeHtml(embed.url)}">${escapeHtml(embed.url)}</a></div>` : ""}
+        ${fields}
+        ${image}
+        ${thumbnail}
+        ${embed.footer?.text ? `<div class="embed-footer">${escapeHtml(embed.footer.text)}</div>` : ""}
+      </div>`;
+    }).join("");
+
+    const reactions = message.reactions.cache.size
+      ? `<div class="reactions">${[...message.reactions.cache.values()].map(r => `${escapeHtml(r.emoji.name || "emoji")} × ${r.count}`).join(" • ")}</div>`
+      : "";
+
+    const reply = message.reference?.messageId
+      ? `<div class="reply">↪ Reply to message ID: ${escapeHtml(message.reference.messageId)}</div>`
       : "";
 
     return `
@@ -55,9 +83,11 @@ async function buildTranscript(channel, ticket) {
             <strong>${escapeHtml(message.author.tag || message.author.username)}</strong>
             <span>${escapeHtml(date)}</span>
           </div>
-          <div class="content">${escapeHtml(message.content || "").replaceAll("\n", "<br>")}</div>
+          ${reply}
+          <div class="content">${escapeHtml(message.content || "(no text content)").replaceAll("\n", "<br>")}</div>
           ${attachments}
           ${embeds}
+          ${reactions}
         </div>
       </div>
     `;
@@ -78,7 +108,8 @@ body{font-family:Arial,sans-serif;background:#1e1f22;color:#dbdee1;margin:0;padd
 .header{display:flex;gap:10px;align-items:baseline}
 .header span{font-size:12px;color:#949ba4}
 .content{margin-top:5px;white-space:normal;overflow-wrap:anywhere}
-.attachment,.embed-note{margin-top:7px;color:#b5bac1}
+.attachment,.embed-note,.reactions,.reply{margin-top:7px;color:#b5bac1}
+.embed-box{border-left:4px solid #5865f2;background:#2b2d31;padding:10px 12px;margin-top:8px;border-radius:4px}.embed-title{font-weight:bold;font-size:16px;margin:5px 0}.embed-field{margin-top:8px}.embed-footer{margin-top:8px;font-size:12px;color:#949ba4}.embed-media{margin-top:7px}
 a{color:#00a8fc}
 </style>
 </head>

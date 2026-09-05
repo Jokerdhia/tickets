@@ -28,7 +28,11 @@ const {
   confirmRobberyArrived,
   acceptRobbery,
   refuseRobbery,
-  robberyRefuseModal
+  robberyRefuseModal,
+  transferModal,
+  noteModal,
+  transferTicket,
+  addInternalNote
 } = require("./tickets");
 
 const requiredEnv = [
@@ -66,6 +70,39 @@ async function registerCommands() {
 }
 
 
+
+
+async function escalateUnclaimedTickets() {
+  try {
+    const { unclaimedEscalationMinutes, ticketTypes, robberyConfig } = require("./config");
+    if (!unclaimedEscalationMinutes || unclaimedEscalationMinutes <= 0) return;
+
+    const pending = await db.getTicketsForEscalation(unclaimedEscalationMinutes);
+    for (const ticket of pending) {
+      const guild = client.guilds.cache.get(ticket.guild_id);
+      const channel = guild?.channels.cache.get(ticket.channel_id);
+      if (!channel?.isTextBased()) continue;
+
+      const roleIds = ticket.ticket_type === "robbery"
+        ? robberyConfig.staffRoleIds
+        : (ticketTypes[ticket.ticket_type]?.staffRoleIds || []);
+
+      const mentions = roleIds.map(id => `<@&${id}>`).join(" ");
+      await channel.send({
+        content: mentions || undefined,
+        embeds: [{
+          title: "🚨 Ticket Escalation",
+          description: `هذه التذكرة لم يتم استلامها منذ أكثر من **${unclaimedEscalationMinutes} دقيقة**.`,
+          timestamp: new Date().toISOString()
+        }],
+        allowedMentions: { roles: roleIds }
+      }).catch(() => {});
+      await db.markEscalated(ticket.id);
+    }
+  } catch (error) {
+    console.error("Erreur escalation tickets:", error);
+  }
+}
 
 async function sendRobberyReminders() {
   try {
@@ -149,8 +186,10 @@ client.once("ready", async () => {
   console.log(`✅ Serveurs : ${client.guilds.cache.size}`);
   await expireRobberyTickets();
   await sendRobberyReminders();
+  await escalateUnclaimedTickets();
   setInterval(expireRobberyTickets, 60 * 1000);
   setInterval(sendRobberyReminders, 60 * 1000);
+  setInterval(escalateUnclaimedTickets, 60 * 1000);
 });
 
 client.on("interactionCreate", async interaction => {
@@ -206,6 +245,20 @@ client.on("interactionCreate", async interaction => {
         return interaction.showModal(memberModal("remove"));
       }
 
+      if (interaction.customId === "ticket_transfer") {
+        if (!canManageTicket(interaction.member, ticket)) {
+          return interaction.reply({ content: "❌ ليست لديك صلاحية نقل التذكرة.", ephemeral: true });
+        }
+        return interaction.showModal(transferModal());
+      }
+
+      if (interaction.customId === "ticket_note") {
+        if (!canManageTicket(interaction.member, ticket)) {
+          return interaction.reply({ content: "❌ ليست لديك صلاحية إضافة ملاحظة.", ephemeral: true });
+        }
+        return interaction.showModal(noteModal());
+      }
+
       if (interaction.customId === "robbery_accept") {
         return await acceptRobbery(interaction, ticket);
       }
@@ -242,6 +295,24 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === "ticket_transfer_modal") {
+        const ticket = await getCurrentTicket(interaction);
+        if (!ticket || ticket.status !== "open") {
+          return interaction.reply({ content: "❌ هذه التذكرة ليست مفتوحة.", ephemeral: true });
+        }
+        const userId = interaction.fields.getTextInputValue("user_id").trim();
+        return await transferTicket(interaction, ticket, userId);
+      }
+
+      if (interaction.customId === "ticket_note_modal") {
+        const ticket = await getCurrentTicket(interaction);
+        if (!ticket || ticket.status !== "open") {
+          return interaction.reply({ content: "❌ هذه التذكرة ليست مفتوحة.", ephemeral: true });
+        }
+        const note = interaction.fields.getTextInputValue("note").trim();
+        return await addInternalNote(interaction, ticket, note);
+      }
+
       if (interaction.customId === "robbery_refuse_modal") {
         const ticket = await getCurrentTicket(interaction);
         if (!ticket || ticket.status !== "open") {

@@ -14,7 +14,8 @@ const {
 const {
   ticketTypes,
   logChannelId,
-  robberyConfig
+  robberyConfig,
+  robberyCooldownMinutes
 } = require("./config");
 
 const db = require("./db");
@@ -47,6 +48,17 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
           .setEmoji("↩️")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(!claimedBy),
+        new ButtonBuilder()
+          .setCustomId("ticket_transfer")
+          .setLabel("Transfer")
+          .setEmoji("🔁")
+          .setStyle(ButtonStyle.Primary)
+          .setDisabled(!claimedBy),
+        new ButtonBuilder()
+          .setCustomId("ticket_note")
+          .setLabel("Add Note")
+          .setEmoji("📝")
+          .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("ticket_close")
           .setLabel("Close")
@@ -100,7 +112,21 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return [row1, row2];
+  const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("ticket_transfer")
+      .setLabel("Transfer")
+      .setEmoji("🔁")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(!claimedBy || refused),
+    new ButtonBuilder()
+      .setCustomId("ticket_note")
+      .setLabel("Add Note")
+      .setEmoji("📝")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return [row1, row2, row3];
 }
 
 function memberHasAnyRole(member, roleIds) {
@@ -245,6 +271,14 @@ function robberyRequestModal(robberyKey) {
 }
 
 async function createRobberyTicket(interaction, robberyKey, formData) {
+  const blacklist = await db.getBlacklistEntry(interaction.guildId, interaction.user.id);
+  if (blacklist) {
+    return interaction.reply({
+      content: `⛔ لا يمكنك فتح تذكرة حالياً. السبب: **${blacklist.reason}**`,
+      ephemeral: true
+    });
+  }
+
   const robbery = robberyConfig.robberies[robberyKey];
 
   if (!robbery) {
@@ -296,6 +330,20 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
       );
     }
   }
+
+if (robberyCooldownMinutes > 0) {
+  const previous = await db.getRecentClosedRobberyForGroup(interaction.guildId, groupName);
+  if (previous?.closed_at) {
+    const nextAllowed = new Date(previous.closed_at).getTime() + robberyCooldownMinutes * 60_000;
+    if (Date.now() < nextAllowed) {
+      const unix = Math.floor(nextAllowed / 1000);
+      return interaction.editReply(
+        `⏳ العصابة / المافيا **${groupName}** في فترة انتظار.\n` +
+        `يمكن فتح عملية جديدة <t:${unix}:R>.`
+      );
+    }
+  }
+}
 
   const existingUserTicket = await db.getOpenRobberyTicketForUser(
     interaction.guildId,
@@ -509,6 +557,14 @@ function canOpenTicket(member, type) {
 }
 
 async function createTicket(interaction, typeKey) {
+  const blacklist = await db.getBlacklistEntry(interaction.guildId, interaction.user.id);
+  if (blacklist) {
+    return interaction.reply({
+      content: `⛔ لا يمكنك فتح تذكرة حالياً. السبب: **${blacklist.reason}**`,
+      ephemeral: true
+    });
+  }
+
   const type = ticketTypes[typeKey];
 
   if (!type) {
@@ -893,6 +949,94 @@ async function confirmRobberyArrived(interaction, ticket) {
   return interaction.reply({ embeds: [embed] });
 }
 
+
+function transferModal() {
+  const modal = new ModalBuilder()
+    .setCustomId("ticket_transfer_modal")
+    .setTitle("Transfer Ticket");
+
+  const userId = new TextInputBuilder()
+    .setCustomId("user_id")
+    .setLabel("New staff Discord ID")
+    .setPlaceholder("123456789012345678")
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(15)
+    .setMaxLength(22)
+    .setRequired(true);
+
+  modal.addComponents(new ActionRowBuilder().addComponents(userId));
+  return modal;
+}
+
+function noteModal() {
+  const modal = new ModalBuilder()
+    .setCustomId("ticket_note_modal")
+    .setTitle("Add Internal Note");
+
+  const note = new TextInputBuilder()
+    .setCustomId("note")
+    .setLabel("Internal staff note")
+    .setPlaceholder("Visible only through staff tools and ticket logs")
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(2)
+    .setMaxLength(1000)
+    .setRequired(true);
+
+  modal.addComponents(new ActionRowBuilder().addComponents(note));
+  return modal;
+}
+
+async function transferTicket(interaction, ticket, userId) {
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({ content: "❌ ليست لديك صلاحية نقل التذكرة.", ephemeral: true });
+  }
+  const member = await interaction.guild.members.fetch(userId).catch(() => null);
+  if (!member || !canManageTicket(member, ticket)) {
+    return interaction.reply({ content: "❌ يجب أن يكون المستخدم عضواً مخولاً بإدارة هذا النوع من التذاكر.", ephemeral: true });
+  }
+
+  const updated = await db.transferTicket(ticket.id, userId);
+  await updateControlMessage(
+    interaction.channel,
+    updated.claimed_by,
+    ticket.ticket_type,
+    Boolean(ticket.robbery_arrived_at),
+    ticket.robbery_decision || "pending"
+  );
+
+  return interaction.reply({
+    embeds: [new EmbedBuilder()
+      .setTitle("🔁 Ticket Transferred")
+      .setDescription(`${interaction.user} نقل التذكرة إلى ${member}.`)
+      .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+      .setTimestamp()]
+  });
+}
+
+async function addInternalNote(interaction, ticket, note) {
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({ content: "❌ ليست لديك صلاحية إضافة ملاحظة داخلية.", ephemeral: true });
+  }
+
+  await db.addTicketNote(ticket.id, interaction.user.id, note);
+
+  const logChannel = logChannelId ? interaction.guild.channels.cache.get(logChannelId) : null;
+  if (logChannel?.isTextBased()) {
+    await logChannel.send({
+      embeds: [new EmbedBuilder()
+        .setTitle(`📝 Internal Note • ${ticket.ticket_code || `Ticket #${ticket.id}`}`)
+        .addFields(
+          { name: "Staff", value: `${interaction.user}`, inline: true },
+          { name: "Channel", value: `${interaction.channel}`, inline: true },
+          { name: "Note", value: note.slice(0, 1024) }
+        )
+        .setTimestamp()]
+    }).catch(() => {});
+  }
+
+  return interaction.reply({ content: "✅ Internal note saved.", ephemeral: true });
+}
+
 function closeModal() {
   const modal = new ModalBuilder()
     .setCustomId("ticket_close_modal")
@@ -967,6 +1111,8 @@ async function executeClose(interaction, ticket, reason) {
 
   await interaction.deferReply();
 
+  const internalNotes = await db.getTicketNotes(ticket.id).catch(() => []);
+
   const transcript = await buildTranscript(interaction.channel, ticket).catch(error => {
     console.error("Erreur transcript:", error);
     return null;
@@ -983,7 +1129,7 @@ async function executeClose(interaction, ticket, reason) {
 
   if (logChannel?.isTextBased()) {
     const logEmbed = new EmbedBuilder()
-      .setTitle(`🔒 Ticket #${ticket.id} fermé`)
+      .setTitle(`🔒 ${ticket.ticket_code || `TK-${ticket.id}`} • Closed`)
       .addFields(
         { name: "Propriétaire", value: `<@${ticket.owner_id}>`, inline: true },
         { name: "النوع", value: ticket.ticket_type === "robbery"
@@ -997,8 +1143,18 @@ async function executeClose(interaction, ticket, reason) {
           { name: "Gang / Mafia", value: ticket.group_name || "غير مسجل", inline: true },
           { name: "Participants", value: String(ticket.criminal_count || "غير مسجل"), inline: true },
           { name: "Weapons", value: ticket.guns || "غير مسجل", inline: false },
-          { name: "Decision", value: ticket.robbery_decision || "pending", inline: true }
-        ] : [])
+          { name: "Decision", value: ticket.robbery_decision || "pending", inline: true },
+          { name: "Approved By", value: ticket.accepted_by ? `<@${ticket.accepted_by}>` : "—", inline: true },
+          { name: "Rejected By", value: ticket.refused_by ? `<@${ticket.refused_by}>` : "—", inline: true },
+          { name: "Rejection Reason", value: (ticket.refusal_reason || "—").slice(0, 1024), inline: false },
+          { name: "Arrival Confirmed", value: ticket.robbery_arrived_at ? `<t:${Math.floor(new Date(ticket.robbery_arrived_at).getTime()/1000)}:F>` : "No", inline: true }
+        ] : []),
+        { name: "Created", value: ticket.created_at ? `<t:${Math.floor(new Date(ticket.created_at).getTime()/1000)}:F>` : "—", inline: true },
+        { name: "Closed", value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true },
+        { name: "Internal Notes", value: internalNotes.length
+          ? internalNotes.map(n => `• <@${n.author_id}>: ${n.note}`).join("\n").slice(0, 1024)
+          : "None", inline: false },
+        { name: "Transcript", value: "📄 Full message history is attached as an HTML transcript, including text, embeds, attachments, reactions and timestamps.", inline: false }
       )
       .setTimestamp();
 
@@ -1041,5 +1197,9 @@ module.exports = {
   confirmRobberyArrived,
   acceptRobbery,
   refuseRobbery,
-  robberyRefuseModal
+  robberyRefuseModal,
+  transferModal,
+  noteModal,
+  transferTicket,
+  addInternalNote
 };

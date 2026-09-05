@@ -340,3 +340,34 @@ Participant limits:
 | Pacific Bank | 8 |
 | Cargo | 12 |
 | Submarine | 15 |
+
+
+# V6.3 — Complete Ticket Logs
+
+Closing a ticket now logs all ticket metadata and attaches a full HTML transcript containing messages, embeds, attachments, reactions, reply references and timestamps.
+
+
+# V7 — Command Center (Discord only)
+
+No web dashboard is included.
+
+## Added
+- Permanent ticket codes: `RB-000001`, `SH-000001`, `HP-000001`, `PC-000001`
+- Transfer button for staff ownership
+- Internal staff notes stored in Neon and included in closing logs
+- `/ticket-notes`
+- `/ticket-history`
+- `/ticket-stats`
+- `/ticket-blacklist add|remove|check`
+- `/ticket-warning add|list`
+- Automatic blacklist check before ticket creation
+- Gang/Mafia cooldown after a closed robbery
+- Automatic escalation for unclaimed tickets
+- Detailed closing logs and HTML transcripts from V6.3
+- Existing robbery workflow retained: Claim → Approve/Reject → 20 min → reminders → All On Site / timeout
+- English-only button labels retained
+
+## Optional environment variables
+- `TICKET_SUPERVISOR_ROLE_IDS` — comma-separated role IDs allowed to use blacklist/history/stats/warnings.
+- `ROBBERY_COOLDOWN_MINUTES` — default `30`.
+- `TICKET_ESCALATION_MINUTES` — default `10`.

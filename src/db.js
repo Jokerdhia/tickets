@@ -39,7 +39,9 @@ async function initDb() {
       closed_by TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       claimed_at TIMESTAMPTZ,
-      closed_at TIMESTAMPTZ
+      closed_at TIMESTAMPTZ,
+      ticket_code TEXT,
+      escalated_at TIMESTAMPTZ
     );
   `);
 
@@ -57,6 +59,8 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS refusal_reason TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_10_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_5_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_code TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;`);
 
 
   await pool.query(`
@@ -74,6 +78,39 @@ async function initDb() {
     );
   `);
 
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS ticket_notes (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_id BIGINT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL,
+    note TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS ticket_blacklist (
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    added_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (guild_id, user_id)
+  );
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS ticket_warnings (
+    id BIGSERIAL PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    added_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`);
+
   console.log("✅ Base Neon PostgreSQL prête.");
 }
 
@@ -84,7 +121,14 @@ async function createTicket({ guildId, channelId, ownerId, ticketType, robberyTy
      RETURNING *`,
     [guildId, channelId, ownerId, ticketType, robberyType, groupName, criminalCount, guns]
   );
-  return rows[0];
+  const ticket = rows[0];
+  const prefixes = { robbery: "RB", racer: "SH", police: "HP", complaint: "PC" };
+  const code = `${prefixes[ticketType] || "TK"}-${String(ticket.id).padStart(6, "0")}`;
+  const updated = await pool.query(
+    `UPDATE tickets SET ticket_code = $2 WHERE id = $1 RETURNING *`,
+    [ticket.id, code]
+  );
+  return updated.rows[0];
 }
 
 async function getTicketByChannel(channelId) {
@@ -290,6 +334,120 @@ async function markReminderSent(ticketId, kind) {
   await pool.query(`UPDATE tickets SET ${column} = TRUE WHERE id = $1`, [ticketId]);
 }
 
+
+async function transferTicket(ticketId, userId) {
+  const { rows } = await pool.query(
+    `UPDATE tickets SET claimed_by = $2, claimed_at = NOW()
+     WHERE id = $1 AND status = 'open' RETURNING *`,
+    [ticketId, userId]
+  );
+  return rows[0] || null;
+}
+
+async function addTicketNote(ticketId, authorId, note) {
+  const { rows } = await pool.query(
+    `INSERT INTO ticket_notes (ticket_id, author_id, note)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [ticketId, authorId, note]
+  );
+  return rows[0];
+}
+
+async function getTicketNotes(ticketId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM ticket_notes WHERE ticket_id = $1 ORDER BY created_at ASC`,
+    [ticketId]
+  );
+  return rows;
+}
+
+async function blacklistUser(guildId, userId, reason, addedBy) {
+  await pool.query(
+    `INSERT INTO ticket_blacklist (guild_id, user_id, reason, added_by)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (guild_id, user_id)
+     DO UPDATE SET reason = EXCLUDED.reason, added_by = EXCLUDED.added_by, created_at = NOW()`,
+    [guildId, userId, reason, addedBy]
+  );
+}
+
+async function unblacklistUser(guildId, userId) {
+  await pool.query(`DELETE FROM ticket_blacklist WHERE guild_id = $1 AND user_id = $2`, [guildId, userId]);
+}
+
+async function getBlacklistEntry(guildId, userId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM ticket_blacklist WHERE guild_id = $1 AND user_id = $2 LIMIT 1`,
+    [guildId, userId]
+  );
+  return rows[0] || null;
+}
+
+async function addWarning(guildId, userId, reason, addedBy) {
+  const { rows } = await pool.query(
+    `INSERT INTO ticket_warnings (guild_id, user_id, reason, added_by)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [guildId, userId, reason, addedBy]
+  );
+  return rows[0];
+}
+
+async function getWarnings(guildId, userId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM ticket_warnings WHERE guild_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 20`,
+    [guildId, userId]
+  );
+  return rows;
+}
+
+async function getTicketHistory(guildId, ownerId, limit = 10) {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets WHERE guild_id = $1 AND owner_id = $2 ORDER BY created_at DESC LIMIT $3`,
+    [guildId, ownerId, limit]
+  );
+  return rows;
+}
+
+async function getGuildStats(guildId) {
+  const { rows } = await pool.query(
+    `SELECT ticket_type, status, COUNT(*)::int AS count
+     FROM tickets WHERE guild_id = $1
+     GROUP BY ticket_type, status`,
+    [guildId]
+  );
+  return rows;
+}
+
+async function getRecentClosedRobberyForGroup(guildId, groupName) {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets
+     WHERE guild_id = $1
+       AND ticket_type = 'robbery'
+       AND status = 'closed'
+       AND LOWER(TRIM(group_name)) = LOWER(TRIM($2))
+     ORDER BY closed_at DESC NULLS LAST
+     LIMIT 1`,
+    [guildId, groupName]
+  );
+  return rows[0] || null;
+}
+
+async function getTicketsForEscalation(minutes) {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets
+     WHERE status = 'open'
+       AND claimed_by IS NULL
+       AND escalated_at IS NULL
+       AND created_at <= NOW() - ($1::text || ' minutes')::interval`,
+    [String(minutes)]
+  );
+  return rows;
+}
+
+async function markEscalated(ticketId) {
+  await pool.query(`UPDATE tickets SET escalated_at = NOW() WHERE id = $1`, [ticketId]);
+}
+
 module.exports = {
   pool,
   initDb,
@@ -310,5 +468,18 @@ module.exports = {
   acceptRobbery,
   refuseRobbery,
   getRobberiesNeedingReminders,
-  markReminderSent
+  markReminderSent,
+  transferTicket,
+  addTicketNote,
+  getTicketNotes,
+  blacklistUser,
+  unblacklistUser,
+  getBlacklistEntry,
+  addWarning,
+  getWarnings,
+  getTicketHistory,
+  getGuildStats,
+  getRecentClosedRobberyForGroup,
+  getTicketsForEscalation,
+  markEscalated
 };
