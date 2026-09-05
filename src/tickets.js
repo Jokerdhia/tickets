@@ -377,7 +377,6 @@ function createPanelEmbed() {
         "🏎️ **Racer / Speed Unit** — Demande liée aux racers / Speed Unit",
         "🚓 **Police / HMPD** — Demande liée à la police",
         "⚠️ **Réclamation** — Signaler une situation",
-        "🛡️ **Administration** — Demande administrative",
         "",
         "Un salon privé sera créé automatiquement."
       ].join("\n")
@@ -410,12 +409,7 @@ function createPanelRows() {
       .setCustomId("ticket_create:complaint")
       .setLabel("Réclamation")
       .setEmoji("⚠️")
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId("ticket_create:admin")
-      .setLabel("Administration")
-      .setEmoji("🛡️")
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Danger)
   );
 
   return [robberyRow, mainRow];

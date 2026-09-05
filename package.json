@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "4.2.0",
-  "description": "HMPD ticket bot V4.2 - Racer/Speed Unit, sans Support ni Bug",
+  "version": "4.3.0",
+  "description": "HMPD ticket bot V4.3 - panneau sans Support, Bug ni Administration",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
