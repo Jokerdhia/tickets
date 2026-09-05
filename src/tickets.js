@@ -41,7 +41,7 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false) {
       .setDisabled(Boolean(claimedBy)),
     new ButtonBuilder()
       .setCustomId("ticket_unclaim")
-      .setLabel("Libérer")
+      .setLabel("إلغاء الاستلام")
       .setEmoji("↩️")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(!claimedBy)
@@ -61,7 +61,7 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false) {
   buttons.push(
     new ButtonBuilder()
       .setCustomId("ticket_close")
-      .setLabel("Fermer")
+      .setLabel("إغلاق")
       .setEmoji("🔒")
       .setStyle(ButtonStyle.Danger)
   );
@@ -107,7 +107,7 @@ async function updateControlMessage(channel, claimedBy, ticketType = null, arriv
 function robberySelectMenu() {
   const menu = new StringSelectMenuBuilder()
     .setCustomId("robbery_select")
-    .setPlaceholder("Choisis l'opération à demander")
+    .setPlaceholder("اختر العملية المطلوبة")
     .setMinValues(1)
     .setMaxValues(1);
 
@@ -116,7 +116,7 @@ function robberySelectMenu() {
       label: robbery.label,
       value: robbery.key,
       emoji: robbery.emoji,
-      description: `Maximum ${robbery.maxOpen} demande(s) ouverte(s)`
+      description: `الحد الأقصى: ${robbery.maxOpen} طلب مفتوح`
     });
   }
 
@@ -133,7 +133,7 @@ async function showRobberyMenu(interaction) {
 
   if (!interaction.member.roles.cache.has(robberyConfig.illegalRoleId)) {
     return interaction.reply({
-      content: "❌ Ce menu est réservé aux membres ayant le rôle **Illegal**.",
+      content: "❌ هذا القسم مخصص فقط لأعضاء **Illegal**.",
       ephemeral: true
     });
   }
@@ -146,13 +146,13 @@ async function showRobberyMenu(interaction) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle("🔫 Demande de braquage")
+    .setTitle("🔫 طلب عملية سطو")
     .setDescription([
-      "Choisis l'opération que tu veux demander.",
+      "اختر العملية التي ترغب في طلبها.",
       "",
       ...lines,
       "",
-      "🔴 = complet • 🟠 = places restantes • 🟢 = disponible"
+      "🔴 = مكتمل • 🟠 = أماكن متبقية • 🟢 = متاح"
     ].join("\n"))
     .setFooter({ text: "HMPD • Illegal Operations" })
     .setTimestamp();
@@ -170,12 +170,12 @@ function robberyRequestModal(robberyKey) {
 
   const modal = new ModalBuilder()
     .setCustomId(`robbery_request_modal:${robberyKey}`)
-    .setTitle(`Demande — ${robbery?.label || "Braquage"}`);
+    .setTitle(`طلب — ${robbery?.label || "سطو"}`);
 
   const groupName = new TextInputBuilder()
     .setCustomId("group_name")
-    .setLabel("Nom du gang ou de la mafia")
-    .setPlaceholder("Exemple : Los Santos Cartel")
+    .setLabel("اسم العصابة أو المافيا")
+    .setPlaceholder("مثال: Los Santos Cartel")
     .setStyle(TextInputStyle.Short)
     .setMinLength(2)
     .setMaxLength(80)
@@ -183,8 +183,8 @@ function robberyRequestModal(robberyKey) {
 
   const criminalCount = new TextInputBuilder()
     .setCustomId("criminal_count")
-    .setLabel("Combien êtes-vous ?")
-    .setPlaceholder("Exemple : 4")
+    .setLabel("عدد المشاركين")
+    .setPlaceholder("مثال: 4")
     .setStyle(TextInputStyle.Short)
     .setMinLength(1)
     .setMaxLength(2)
@@ -192,8 +192,8 @@ function robberyRequestModal(robberyKey) {
 
   const guns = new TextInputBuilder()
     .setCustomId("guns")
-    .setLabel("Modèle(s) d'arme")
-    .setPlaceholder("Exemple : AP Pistol, Micro SMG")
+    .setLabel("نوع / موديل السلاح")
+    .setPlaceholder("مثال: AP Pistol, Micro SMG")
     .setStyle(TextInputStyle.Paragraph)
     .setMinLength(2)
     .setMaxLength(300)
@@ -212,7 +212,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   const robbery = robberyConfig.robberies[robberyKey];
 
   if (!robbery) {
-    return interaction.reply({ content: "❌ Opération inconnue.", ephemeral: true });
+    return interaction.reply({ content: "❌ العملية غير معروفة.", ephemeral: true });
   }
 
   const groupName = formData?.groupName?.trim();
@@ -229,7 +229,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
 
   if (!robberyConfig.illegalRoleId || !interaction.member.roles.cache.has(robberyConfig.illegalRoleId)) {
     return interaction.reply({
-      content: "❌ Tu dois avoir le rôle **Illegal** pour ouvrir une demande de braquage.",
+      content: "❌ يجب أن تكون لديك رتبة **Illegal** لفتح طلب سطو.",
       ephemeral: true
     });
   }
@@ -336,20 +336,20 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   const staffMentions = robberyConfig.staffRoleIds.map(id => `<@&${id}>`).join(" ");
 
   const embed = new EmbedBuilder()
-    .setTitle(`${robbery.emoji} Braquage #${ticket.id} — ${robbery.label}`)
+    .setTitle(`${robbery.emoji} طلب سطو #${ticket.id} — ${robbery.label}`)
     .setDescription([
-      `Demande créée par ${interaction.user}.`,
+      `تم إنشاء الطلب بواسطة ${interaction.user}.`,
       "",
       "**Statut :** 🟢 Ouvert",
       "**Staff :** Non assigné"
     ].join("\n"))
     .addFields(
-      { name: "Gang / Mafia", value: groupName, inline: false },
-      { name: "Nombre de criminels", value: String(criminalCount), inline: true },
-      { name: "Modèle(s) d'arme", value: guns, inline: false },
-      { name: "Opération", value: robbery.label, inline: true },
-      { name: "Capacité", value: `${currentOpen + 1}/${robbery.maxOpen}`, inline: true },
-      { name: "Ticket", value: `#${ticket.id}`, inline: true }
+      { name: "العصابة / المافيا", value: groupName, inline: false },
+      { name: "عدد المشاركين", value: String(criminalCount), inline: true },
+      { name: "نوع / موديل السلاح", value: guns, inline: false },
+      { name: "العملية", value: robbery.label, inline: true },
+      { name: "السعة", value: `${currentOpen + 1}/${robbery.maxOpen}`, inline: true },
+      { name: "التذكرة", value: `#${ticket.id}`, inline: true }
     )
     .setFooter({ text: "HMPD • Illegal Operations" })
     .setTimestamp();
@@ -368,20 +368,22 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
 
 function createPanelEmbed() {
   return new EmbedBuilder()
-    .setTitle("🎫 HMPD TICKETS")
+    .setTitle("🎫 نظام تذاكر HMPD")
     .setDescription(
       [
-        "Choisis le service correspondant à ta demande.",
+        "مرحباً بك في نظام التذاكر الرسمي لـ **HMPD**.",
+        "يرجى اختيار نوع الطلب المناسب من الأزرار أدناه.",
         "",
-        "🔫 **Braquage / Illegal** — réservé aux membres Illegal",
-        "🏎️ **Racer / Speed Unit** — réservé aux rôles Racer autorisés",
-        "🚓 **Police / HMPD** — réservé aux rôles Police autorisés",
-        "⚠️ **Réclamation Police** — réservé aux rôles Citizen autorisés",
+        "🔫 **طلب عملية سطو** — مخصص لأعضاء Illegal فقط",
+        "🏎️ **Racer / Speed Unit** — مخصص للأعضاء المصرح لهم",
+        "🚓 **Police / HMPD** — مخصص لأعضاء الشرطة المصرح لهم",
+        "⚠️ **شكوى ضد الشرطة** — مخصص للمواطنين المصرح لهم",
         "",
-        "🔐 Chaque bouton vérifie automatiquement ton rôle avant de créer un ticket."
+        "🔐 يتم التحقق من صلاحية الرتبة تلقائياً قبل إنشاء التذكرة.",
+        "📌 يرجى عدم فتح تذاكر غير ضرورية أو مكررة."
       ].join("\n")
     )
-    .setFooter({ text: "HMPD • Accès contrôlé par rôles" })
+    .setFooter({ text: "HMPD • Official Ticket System" })
     .setTimestamp();
 }
 
@@ -389,7 +391,7 @@ function createPanelRows() {
   const robberyRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_robbery")
-      .setLabel("Demande de braquage")
+      .setLabel("طلب سطو")
       .setEmoji("🔫")
       .setStyle(ButtonStyle.Danger)
   );
@@ -407,7 +409,7 @@ function createPanelRows() {
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("ticket_create:complaint")
-      .setLabel("Réclamation Police")
+      .setLabel("شكوى ضد الشرطة")
       .setEmoji("⚠️")
       .setStyle(ButtonStyle.Danger)
   );
@@ -418,13 +420,13 @@ function createPanelRows() {
 
 function getMissingAccessMessage(type) {
   if (!type?.accessRoleIds?.length) {
-    return `❌ L'accès **${type?.label || "à ce ticket"}** n'est pas encore configuré par l'administration.`;
+    return `❌ لم يتم إعداد صلاحية فتح **${type?.label || "هذه التذكرة"}** بعد. يرجى التواصل مع الإدارة.`;
   }
 
   return [
-    `❌ Tu n'as pas le rôle requis pour ouvrir **${type.label}**.`,
+    `❌ لا تملك الرتبة المطلوبة لفتح **${type.label}**.`,
     "",
-    "Si tu penses que c'est une erreur, contacte un responsable."
+    "إذا كنت تعتقد أن هذا خطأ، يرجى التواصل مع مسؤول."
   ].join("\n");
 }
 
@@ -438,7 +440,7 @@ async function createTicket(interaction, typeKey) {
   const type = ticketTypes[typeKey];
 
   if (!type) {
-    return interaction.reply({ content: "❌ Type de ticket inconnu.", ephemeral: true });
+    return interaction.reply({ content: "❌ نوع التذكرة غير معروف.", ephemeral: true });
   }
 
   if (!canOpenTicket(interaction.member, type)) {
@@ -545,17 +547,17 @@ async function createTicket(interaction, typeKey) {
       [
         `Bienvenue ${interaction.user}.`,
         "",
-        "Explique ta demande avec le maximum de détails.",
-        "Un membre du staff pourra prendre en charge ton ticket.",
+        "يرجى شرح طلبك بوضوح وبأكبر قدر ممكن من التفاصيل.",
+        "سيقوم أحد أعضاء الطاقم المختص باستلام التذكرة في أقرب وقت.",
         "",
-        `**Statut :** 🟢 Ouvert`,
-        `**Staff :** Non assigné`
+        `**الحالة:** 🟢 مفتوحة`,
+        `**المسؤول:** غير معيّن`
       ].join("\n")
     )
     .addFields(
-      { name: "Créé par", value: `${interaction.user}`, inline: true },
-      { name: "Type", value: type.label, inline: true },
-      { name: "Ticket", value: `#${ticket.id}`, inline: true }
+      { name: "تم الإنشاء بواسطة", value: `${interaction.user}`, inline: true },
+      { name: "النوع", value: type.label, inline: true },
+      { name: "التذكرة", value: `#${ticket.id}`, inline: true }
     )
     .setFooter({ text: "HMPD • Ticket System" })
     .setTimestamp();
@@ -572,7 +574,7 @@ async function createTicket(interaction, typeKey) {
 async function claimTicket(interaction, ticket) {
   if (!canManageTicket(interaction.member, ticket)) {
     return interaction.reply({
-      content: "❌ Tu n'as pas la permission de prendre ce ticket.",
+      content: "❌ ليست لديك صلاحية استلام هذه التذكرة.",
       ephemeral: true
     });
   }
@@ -593,17 +595,18 @@ async function claimTicket(interaction, ticket) {
 
     const unix = Math.floor(deadline.getTime() / 1000);
     const embed = new EmbedBuilder()
-      .setTitle("✅ Braquage accepté")
+      .setTitle("✅ تم قبول طلب السطو")
       .setDescription([
-        `${interaction.user} a accepté la demande.`,
+        `تم قبول الطلب بواسطة ${interaction.user}.`,
         "",
-        `⏱️ **Tous les membres du gang/mafia doivent être au point du braquage dans les 20 minutes.**`,
-        `Date limite : <t:${unix}:R> (<t:${unix}:t>).`,
+        "⏱️ **يجب على جميع أفراد العصابة / المافيا التواجد في موقع العملية خلال مدة أقصاها 20 دقيقة.**",
+        `المهلة المتبقية: <t:${unix}:R> — الموعد النهائي: <t:${unix}:t>.`,
         "",
-        "Une fois tout le monde sur place, un membre du staff doit cliquer sur **Tout le monde sur place**.",
+        "عند وصول الجميع إلى الموقع، يجب على أحد أعضاء الطاقم الضغط على زر **الجميع في الموقع**.",
         "",
-        "❌ Si l'arrivée n'est pas confirmée avant la limite, le ticket sera fermé automatiquement et le braquage sera annulé."
+        "❌ إذا لم يتم تأكيد الوصول قبل انتهاء المهلة، سيتم إلغاء العملية وإغلاق التذكرة تلقائياً."
       ].join("\n"))
+      .setFooter({ text: "HMPD • Robbery Authorization" })
       .setTimestamp();
 
     return interaction.reply({ embeds: [embed] });
@@ -612,7 +615,7 @@ async function claimTicket(interaction, ticket) {
   await updateControlMessage(interaction.channel, updated.claimed_by, ticket.ticket_type, false);
 
   const embed = new EmbedBuilder()
-    .setDescription(`🙋 Ticket pris en charge par ${interaction.user}.`)
+    .setDescription(`🙋 تم استلام التذكرة بواسطة ${interaction.user}.`)
     .setTimestamp();
 
   await interaction.reply({ embeds: [embed] });
@@ -621,14 +624,14 @@ async function claimTicket(interaction, ticket) {
 async function unclaimTicket(interaction, ticket) {
   if (!canManageTicket(interaction.member, ticket)) {
     return interaction.reply({
-      content: "❌ Tu n'as pas la permission de libérer ce ticket.",
+      content: "❌ ليست لديك صلاحية إلغاء استلام هذه التذكرة.",
       ephemeral: true
     });
   }
 
   if (!ticket.claimed_by) {
     return interaction.reply({
-      content: "❌ Ce ticket n'est actuellement assigné à personne.",
+      content: "❌ هذه التذكرة غير مستلمة حالياً.",
       ephemeral: true
     });
   }
@@ -703,11 +706,11 @@ async function confirmRobberyArrived(interaction, ticket) {
   await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true);
 
   const embed = new EmbedBuilder()
-    .setTitle("✅ Équipe sur place")
+    .setTitle("✅ تم تأكيد وصول الفريق")
     .setDescription([
-      `${interaction.user} confirme que tous les membres sont au point du braquage.`,
+      `${interaction.user} أكد أن جميع الأعضاء متواجدون في موقع العملية.`,
       "",
-      "Le délai de 20 minutes est validé. Le braquage peut continuer."
+      "تم احترام مهلة الـ 20 دقيقة. يمكن متابعة العملية وفقاً للتعليمات."
     ].join("\n"))
     .setTimestamp();
 
@@ -781,7 +784,7 @@ async function handleMemberModal(interaction, action, ticket) {
 async function executeClose(interaction, ticket, reason) {
   if (!canCloseTicket(interaction.member, ticket)) {
     return interaction.reply({
-      content: "❌ Tu n'as pas la permission de fermer ce ticket.",
+      content: "❌ ليست لديك صلاحية إغلاق هذه التذكرة.",
       ephemeral: true
     });
   }
@@ -807,7 +810,7 @@ async function executeClose(interaction, ticket, reason) {
       .setTitle(`🔒 Ticket #${ticket.id} fermé`)
       .addFields(
         { name: "Propriétaire", value: `<@${ticket.owner_id}>`, inline: true },
-        { name: "Type", value: ticket.ticket_type === "robbery"
+        { name: "النوع", value: ticket.ticket_type === "robbery"
           ? `Braquage — ${robberyConfig.robberies[ticket.robbery_type]?.label || ticket.robbery_type}`
           : (ticketTypes[ticket.ticket_type]?.label || ticket.ticket_type), inline: true },
         { name: "Fermé par", value: `${interaction.user}`, inline: true },

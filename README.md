@@ -266,3 +266,18 @@ ROLE_POLICE_ACCESS_IDS=111111111111111111,222222222222222222
 Un administrateur Discord peut toujours ouvrir les tickets pour les tests.
 
 Si un utilisateur n'a pas le rôle requis, aucun salon n'est créé et le bot lui répond avec un message privé.
+
+
+# V5.1 — واجهة عربية احترافية
+
+تم تحويل واجهة المستخدم الأساسية إلى العربية بصياغة أكثر احترافية، بما في ذلك:
+
+- لوحة التذاكر
+- رسائل منع الوصول حسب الرتبة
+- تذاكر Racer / Police / Complaint
+- نموذج السطو
+- قبول السطو
+- مهلة 20 دقيقة
+- تأكيد وصول جميع الأعضاء
+- إلغاء السطو تلقائياً عند انتهاء المهلة
+- أزرار الاستلام والإغلاق

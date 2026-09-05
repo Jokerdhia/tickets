@@ -20,19 +20,19 @@ const {
 const commands = [
   new SlashCommandBuilder()
     .setName("ticket-panel")
-    .setDescription("Publier le panneau de création de tickets"),
+    .setDescription("نشر لوحة إنشاء التذاكر"),
 
   new SlashCommandBuilder()
     .setName("ticket-info")
-    .setDescription("Afficher les informations du ticket courant"),
+    .setDescription("عرض معلومات التذكرة الحالية"),
 
   new SlashCommandBuilder()
     .setName("ticket-close")
-    .setDescription("Fermer le ticket courant")
+    .setDescription("إغلاق التذكرة الحالية")
     .addStringOption(option =>
       option
-        .setName("motif")
-        .setDescription("Motif de fermeture")
+        .setName("reason")
+        .setDescription("سبب الإغلاق")
         .setRequired(true)
         .setMaxLength(500)
     )
@@ -50,7 +50,7 @@ async function handleCommand(interaction) {
   if (interaction.commandName === "ticket-panel") {
     if (!canPublishPanel(interaction.member)) {
       return interaction.reply({
-        content: "❌ Tu n'as pas la permission de publier le panneau.",
+        content: "❌ ليست لديك صلاحية نشر لوحة التذاكر.",
         ephemeral: true
       });
     }
@@ -61,7 +61,7 @@ async function handleCommand(interaction) {
     });
 
     return interaction.reply({
-      content: "✅ Panneau de tickets publié.",
+      content: "✅ تم نشر لوحة التذاكر بنجاح.",
       ephemeral: true
     });
   }
@@ -70,22 +70,22 @@ async function handleCommand(interaction) {
     const ticket = await db.getTicketByChannel(interaction.channelId);
     if (!ticket) {
       return interaction.reply({
-        content: "❌ Ce salon n'est pas un ticket.",
+        content: "❌ هذه القناة ليست تذكرة.",
         ephemeral: true
       });
     }
 
     const type = ticket.ticket_type === "robbery" ? null : ticketTypes[ticket.ticket_type];
     const embed = new EmbedBuilder()
-      .setTitle(`🎫 Ticket #${ticket.id}`)
+      .setTitle(`🎫 التذكرة #${ticket.id}`)
       .addFields(
         { name: "Type", value: ticket.ticket_type === "robbery"
           ? `Braquage — ${robberyConfig.robberies[ticket.robbery_type]?.label || ticket.robbery_type}`
           : (type?.label || ticket.ticket_type), inline: true },
-        { name: "Statut", value: ticket.status, inline: true },
-        { name: "Propriétaire", value: `<@${ticket.owner_id}>`, inline: true },
-        { name: "Pris par", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Non assigné", inline: true },
-        { name: "Créé", value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:R>`, inline: true }
+        { name: "الحالة", value: ticket.status, inline: true },
+        { name: "صاحب التذكرة", value: `<@${ticket.owner_id}>`, inline: true },
+        { name: "تم استلامها بواسطة", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Non assigné", inline: true },
+        { name: "تاريخ الإنشاء", value: `<t:${Math.floor(new Date(ticket.created_at).getTime() / 1000)}:R>`, inline: true }
       )
       .setTimestamp();
 
@@ -96,12 +96,12 @@ async function handleCommand(interaction) {
     const ticket = await db.getTicketByChannel(interaction.channelId);
     if (!ticket) {
       return interaction.reply({
-        content: "❌ Ce salon n'est pas un ticket.",
+        content: "❌ هذه القناة ليست تذكرة.",
         ephemeral: true
       });
     }
 
-    const reason = interaction.options.getString("motif", true);
+    const reason = interaction.options.getString("reason", true);
     return executeClose(interaction, ticket, reason);
   }
 }
