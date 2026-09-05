@@ -447,7 +447,7 @@ function createPanelEmbed() {
         "اختر القسم المناسب لطلبك من الأزرار أدناه.",
         "",
         "🔫 **Robbery Request** — طلب عملية لأعضاء Illegal المصرح لهم",
-        "🏎️ **Racer / Speed Unit** — طلبات Racer و Speed Unit",
+        "🏎️ **Speed Hunters** — طلبات Speed Hunters",
         "🚓 **Police / HMPD** — الطلبات الداخلية الخاصة بالشرطة",
         "⚠️ **Police Complaint** — شكاوى المواطنين ضد الشرطة",
         "",
@@ -471,7 +471,7 @@ function createPanelRows() {
   const mainRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_create:racer")
-      .setLabel("Racer / Speed Unit")
+      .setLabel("Speed Hunters")
       .setEmoji("🏎️")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()

@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "6.1.0",
-  "description": "HMPD Ticket Bot V6.1 - professional Arabic UI with English-only buttons",
+  "version": "6.2.0",
+  "description": "HMPD Ticket Bot V6.2 - Speed Hunters",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

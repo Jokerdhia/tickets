@@ -8,7 +8,7 @@ function csv(value) {
 const ticketTypes = {
   racer: {
     key: "racer",
-    label: "Racer / Speed Unit",
+    label: "Speed Hunters",
     emoji: "🏎️",
     description: "Demande liée aux racers ou à la Speed Unit",
     categoryId: process.env.CATEGORY_RACER_ID,

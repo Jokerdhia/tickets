@@ -218,12 +218,12 @@ Le panneau principal n'affiche plus les boutons **Support** et **Bug**.
 
 Boutons affichés :
 - Demande de braquage
-- Racer / Speed Unit
+- Speed Hunters
 - Police / HMPD
 - Réclamation
 - Administration
 
-Pour Racer / Speed Unit, ajouter dans Render :
+Pour Speed Hunters, ajouter dans Render :
 
 ```env
 CATEGORY_RACER_ID=
@@ -239,7 +239,7 @@ ROLE_RACER_IDS=
 Le panneau contient uniquement :
 
 - 🔫 Demande de braquage
-- 🏎️ Racer / Speed Unit
+- 🏎️ Speed Hunters
 - 🚓 Police / HMPD
 - ⚠️ Réclamation Police
 
