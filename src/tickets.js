@@ -167,7 +167,7 @@ async function updateControlMessage(channel, claimedBy, ticketType = null, arriv
 function robberySelectMenu() {
   const menu = new StringSelectMenuBuilder()
     .setCustomId("robbery_select")
-    .setPlaceholder("اختر العملية المطلوبة")
+    .setPlaceholder("Select robbery operation")
     .setMinValues(1)
     .setMaxValues(1);
 
@@ -176,7 +176,7 @@ function robberySelectMenu() {
       label: robbery.label,
       value: robbery.key,
       emoji: robbery.emoji,
-      description: `الحد الأقصى: ${robbery.maxOpen} طلب مفتوح`
+      description: `Slots: ${robbery.maxOpen} • Max players: ${robbery.maxCriminals ?? "N/A"}`
     });
   }
 
@@ -198,34 +198,55 @@ async function showRobberyMenu(interaction) {
     });
   }
 
-  const lines = [];
+  const rows = [];
   for (const robbery of Object.values(robberyConfig.robberies)) {
     const current = await db.countOpenRobberyTickets(interaction.guildId, robbery.key);
-    const icon = current >= robbery.maxOpen ? "🔴" : current === 0 ? "🟢" : "🟠";
-    lines.push(`${icon} **${robbery.label}** — ${current}/${robbery.maxOpen}` +
-      (robbery.maxCriminals ? ` • الحد الأقصى للأفراد: ${robbery.maxCriminals}` : ""));
+    const remaining = Math.max(0, robbery.maxOpen - current);
+
+    let statusEmoji = "🟢";
+    let statusText = "Available";
+
+    if (current >= robbery.maxOpen) {
+      statusEmoji = "🔴";
+      statusText = "Full";
+    } else if (remaining === 1) {
+      statusEmoji = "🟠";
+      statusText = "Limited";
+    }
+
+    rows.push(
+      `${statusEmoji} **${robbery.label}**\n` +
+      `> Slots: \`${current}/${robbery.maxOpen}\`  •  Max Players: \`${robbery.maxCriminals ?? "N/A"}\`  •  ${statusText}`
+    );
   }
 
   const embed = new EmbedBuilder()
-    .setTitle("🔫 طلب عملية سطو")
+    .setTitle("🔫 Robbery Request Center")
     .setDescription([
-      "اختر العملية التي ترغب في طلبها.",
+      "اختر العملية التي ترغب في طلبها من القائمة بالأسفل.",
       "",
-      ...lines,
+      ...rows,
       "",
-      "🔴 = مكتمل • 🟠 = أماكن متبقية • 🟢 = متاح"
+      "**Status**",
+      "🟢 Available   •   🟠 Limited   •   🔴 Full",
+      "",
+      "**قواعد الطلب**",
+      "• عملية واحدة نشطة لكل Gang / Mafia.",
+      "• يجب احترام الحد الأقصى لعدد المشاركين.",
+      "• بعد الموافقة لديك **20 دقيقة** للوصول إلى الموقع.",
+      "• عند وصول الجميع يجب على المسؤول الضغط على **All On Site**."
     ].join("\n"))
-    .addFields({ name: "سياسة الطلب", value: "• عملية واحدة نشطة لكل عصابة / مافيا\n• الالتزام بالعدد الأقصى للمشاركين\n• بعد الموافقة: 20 دقيقة للوصول إلى الموقع", inline: false })
     .setFooter({ text: "HMPD • Illegal Operations" })
     .setTimestamp();
 
-  return interaction.reply({
+  await interaction.reply({
     embeds: [embed],
     components: [robberySelectMenu()],
     ephemeral: true
   });
-}
 
+  deleteEphemeralReplyAfter(interaction, 60_000);
+}
 
 function robberyRequestModal(robberyKey) {
   const robbery = robberyConfig.robberies[robberyKey];

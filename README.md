@@ -371,3 +371,18 @@ No web dashboard is included.
 - `TICKET_SUPERVISOR_ROLE_IDS` — comma-separated role IDs allowed to use blacklist/history/stats/warnings.
 - `ROBBERY_COOLDOWN_MINUTES` — default `30`.
 - `TICKET_ESCALATION_MINUTES` — default `10`.
+
+# V7.1 — Robbery UI Refresh
+
+- Cleaner robbery selection panel
+- Bidi-safe formatting for Arabic + English
+- English dropdown placeholder
+- Clear Slots / Max Players / Status layout
+- Professional status legend
+- Cleaner robbery rules section
+- Ephemeral panel auto-deletes after 60 seconds
+
+# V7.2 — Cargo Capacity
+
+- Cargo: maximum **1 active request** at a time.
+- Cargo max participants remains **12**.

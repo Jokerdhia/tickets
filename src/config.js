@@ -75,7 +75,7 @@ const robberies = {
     key: "cargo",
     label: "Cargo",
     emoji: "✈️",
-    maxOpen: 2,
+    maxOpen: 1,
     maxCriminals: 12
   },
   submarine: {
