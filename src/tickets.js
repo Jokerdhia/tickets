@@ -31,42 +31,76 @@ function safeName(value) {
     .slice(0, 60) || "user";
 }
 
-function ticketControls(claimedBy = null, ticketType = null, arrived = false) {
-  const buttons = [
+function ticketControls(claimedBy = null, ticketType = null, arrived = false, decision = "pending") {
+  if (ticketType !== "robbery") {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ticket_claim")
+          .setLabel(claimedBy ? "تم الاستلام" : "استلام")
+          .setEmoji("🙋")
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(Boolean(claimedBy)),
+        new ButtonBuilder()
+          .setCustomId("ticket_unclaim")
+          .setLabel("إلغاء الاستلام")
+          .setEmoji("↩️")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(!claimedBy),
+        new ButtonBuilder()
+          .setCustomId("ticket_close")
+          .setLabel("إغلاق")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Danger)
+      )
+    ];
+  }
+
+  const accepted = decision === "accepted";
+  const refused = decision === "refused";
+
+  const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_claim")
-      .setLabel(claimedBy ? "Déjà pris" : "Prendre")
+      .setLabel(claimedBy ? "تم الاستلام" : "استلام")
       .setEmoji("🙋")
       .setStyle(ButtonStyle.Success)
-      .setDisabled(Boolean(claimedBy)),
+      .setDisabled(Boolean(claimedBy) || refused),
     new ButtonBuilder()
       .setCustomId("ticket_unclaim")
       .setLabel("إلغاء الاستلام")
       .setEmoji("↩️")
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!claimedBy)
-  ];
+      .setDisabled(!claimedBy || accepted || refused)
+  );
 
-  if (ticketType === "robbery") {
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId("robbery_arrived")
-        .setLabel(arrived ? "Arrivée confirmée" : "Tout le monde sur place")
-        .setEmoji("✅")
-        .setStyle(ButtonStyle.Primary)
-        .setDisabled(!claimedBy || arrived)
-    );
-  }
-
-  buttons.push(
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("robbery_accept")
+      .setLabel("قبول العملية")
+      .setEmoji("✅")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!claimedBy || accepted || refused),
+    new ButtonBuilder()
+      .setCustomId("robbery_refuse")
+      .setLabel("رفض العملية")
+      .setEmoji("❌")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!claimedBy || accepted || refused),
+    new ButtonBuilder()
+      .setCustomId("robbery_arrived")
+      .setLabel(arrived ? "تم تأكيد الوصول" : "الجميع في الموقع")
+      .setEmoji("📍")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(!accepted || arrived),
     new ButtonBuilder()
       .setCustomId("ticket_close")
       .setLabel("إغلاق")
       .setEmoji("🔒")
-      .setStyle(ButtonStyle.Danger)
+      .setStyle(ButtonStyle.Secondary)
   );
 
-  return [new ActionRowBuilder().addComponents(...buttons)];
+  return [row1, row2];
 }
 
 function memberHasAnyRole(member, roleIds) {
@@ -89,7 +123,7 @@ function canCloseTicket(member, ticket) {
   return member.id === ticket.owner_id || canManageTicket(member, ticket);
 }
 
-async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false) {
+async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending") {
   const messages = await channel.messages.fetch({ limit: 30 });
   const controlMessage = messages.find(m =>
     m.author.id === channel.client.user.id &&
@@ -99,7 +133,7 @@ async function updateControlMessage(channel, claimedBy, ticketType = null, arriv
   );
 
   if (controlMessage) {
-    await controlMessage.edit({ components: ticketControls(claimedBy, ticketType, arrived) }).catch(() => {});
+    await controlMessage.edit({ components: ticketControls(claimedBy, ticketType, arrived, decision) }).catch(() => {});
   }
 }
 
@@ -142,7 +176,8 @@ async function showRobberyMenu(interaction) {
   for (const robbery of Object.values(robberyConfig.robberies)) {
     const current = await db.countOpenRobberyTickets(interaction.guildId, robbery.key);
     const icon = current >= robbery.maxOpen ? "🔴" : current === 0 ? "🟢" : "🟠";
-    lines.push(`${icon} **${robbery.label}** — ${current}/${robbery.maxOpen}`);
+    lines.push(`${icon} **${robbery.label}** — ${current}/${robbery.maxOpen}` +
+      (robbery.maxCriminals ? ` • الحد الأقصى للأفراد: ${robbery.maxCriminals}` : ""));
   }
 
   const embed = new EmbedBuilder()
@@ -220,9 +255,16 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   const guns = formData?.guns?.trim();
   const criminalCount = Number(criminalCountRaw);
 
-  if (!groupName || !guns || !Number.isInteger(criminalCount) || criminalCount < 1 || criminalCount > 20) {
+  if (!groupName || !guns || !Number.isInteger(criminalCount) || criminalCount < 1 || criminalCount > 30) {
     return interaction.reply({
-      content: "❌ Formulaire invalide. Le nombre doit être compris entre 1 et 20.",
+      content: "❌ البيانات غير صحيحة. يجب أن يكون عدد المشاركين بين 1 و30.",
+      ephemeral: true
+    });
+  }
+
+  if (robbery.maxCriminals && criminalCount > robbery.maxCriminals) {
+    return interaction.reply({
+      content: `❌ الحد الأقصى لعملية **${robbery.label}** هو **${robbery.maxCriminals}** مشارك. أنت أدخلت **${criminalCount}**.`,
       ephemeral: true
     });
   }
@@ -242,6 +284,17 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   }
 
   await interaction.deferReply({ ephemeral: true });
+
+  const existingGroupTicket = await db.getOpenRobberyTicketForGroup(interaction.guildId, groupName);
+  if (existingGroupTicket) {
+    const groupChannel = interaction.guild.channels.cache.get(existingGroupTicket.channel_id);
+    if (groupChannel) {
+      return interaction.editReply(
+        `❌ العصابة / المافيا **${groupName}** لديها بالفعل عملية نشطة: ${groupChannel}\n` +
+        "يجب إنهاء العملية الحالية قبل فتح طلب جديد."
+      );
+    }
+  }
 
   const existingUserTicket = await db.getOpenRobberyTicketForUser(
     interaction.guildId,
@@ -326,7 +379,10 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
       channelId: channel.id,
       ownerId: interaction.user.id,
       ticketType: "robbery",
-      robberyType: robbery.key
+      robberyType: robbery.key,
+      groupName,
+      criminalCount,
+      guns
     });
   } catch (error) {
     await channel.delete("Erreur création ticket braquage en DB").catch(() => {});
@@ -349,6 +405,7 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
       { name: "نوع / موديل السلاح", value: guns, inline: false },
       { name: "العملية", value: robbery.label, inline: true },
       { name: "السعة", value: `${currentOpen + 1}/${robbery.maxOpen}`, inline: true },
+      { name: "الحد الأقصى للأفراد", value: robbery.maxCriminals ? String(robbery.maxCriminals) : "غير محدد", inline: true },
       { name: "التذكرة", value: `#${ticket.id}`, inline: true }
     )
     .setFooter({ text: "HMPD • Illegal Operations" })
@@ -357,13 +414,27 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
   await channel.send({
     content: `${interaction.user}${staffMentions ? ` ${staffMentions}` : ""}`,
     embeds: [embed],
-    components: ticketControls(null, "robbery")
+    components: ticketControls(null, "robbery", false, "pending")
   });
 
   await interaction.editReply(
-    `✅ Ta demande **${robbery.label}** a été créée : ${channel}\n` +
-    `Occupation actuelle : **${currentOpen + 1}/${robbery.maxOpen}**`
+    `✅ تم إنشاء طلب **${robbery.label}** بنجاح: ${channel}\n` +
+    `الإشغال الحالي: **${currentOpen + 1}/${robbery.maxOpen}**`
   );
+
+  // Supprime automatiquement la confirmation privée après 1 minute.
+  deleteEphemeralReplyAfter(interaction, 60_000);
+}
+
+
+function deleteEphemeralReplyAfter(interaction, delayMs = 60_000) {
+  setTimeout(async () => {
+    try {
+      await interaction.deleteReply();
+    } catch (_) {
+      // La réponse a déjà été supprimée ou n'est plus accessible.
+    }
+  }, delayMs);
 }
 
 function createPanelEmbed() {
@@ -565,7 +636,7 @@ async function createTicket(interaction, typeKey) {
   await channel.send({
     content: `${interaction.user}${staffMentions ? ` ${staffMentions}` : ""}`,
     embeds: [embed],
-    components: ticketControls(null, "robbery")
+    components: ticketControls(null, "robbery", false, "pending")
   });
 
   await interaction.editReply(`✅ Ton ticket a été créé : ${channel}`);
@@ -581,44 +652,27 @@ async function claimTicket(interaction, ticket) {
 
   if (ticket.claimed_by) {
     return interaction.reply({
-      content: `❌ Ce ticket est déjà pris par <@${ticket.claimed_by}>.`,
+      content: `❌ تم استلام هذه التذكرة مسبقاً بواسطة <@${ticket.claimed_by}>.`,
       ephemeral: true
     });
   }
 
   const updated = await db.claimTicket(ticket.id, interaction.user.id);
-
-  if (ticket.ticket_type === "robbery") {
-    const deadline = new Date(Date.now() + 20 * 60 * 1000);
-    await db.setRobberyDeadline(ticket.id, deadline);
-    await updateControlMessage(interaction.channel, updated.claimed_by, "robbery", false);
-
-    const unix = Math.floor(deadline.getTime() / 1000);
-    const embed = new EmbedBuilder()
-      .setTitle("✅ تم قبول طلب السطو")
-      .setDescription([
-        `تم قبول الطلب بواسطة ${interaction.user}.`,
-        "",
-        "⏱️ **يجب على جميع أفراد العصابة / المافيا التواجد في موقع العملية خلال مدة أقصاها 20 دقيقة.**",
-        `المهلة المتبقية: <t:${unix}:R> — الموعد النهائي: <t:${unix}:t>.`,
-        "",
-        "عند وصول الجميع إلى الموقع، يجب على أحد أعضاء الطاقم الضغط على زر **الجميع في الموقع**.",
-        "",
-        "❌ إذا لم يتم تأكيد الوصول قبل انتهاء المهلة، سيتم إلغاء العملية وإغلاق التذكرة تلقائياً."
-      ].join("\n"))
-      .setFooter({ text: "HMPD • Robbery Authorization" })
-      .setTimestamp();
-
-    return interaction.reply({ embeds: [embed] });
-  }
-
-  await updateControlMessage(interaction.channel, updated.claimed_by, ticket.ticket_type, false);
+  await updateControlMessage(
+    interaction.channel,
+    updated.claimed_by,
+    ticket.ticket_type,
+    Boolean(ticket.robbery_arrived_at),
+    ticket.robbery_decision || "pending"
+  );
 
   const embed = new EmbedBuilder()
-    .setDescription(`🙋 تم استلام التذكرة بواسطة ${interaction.user}.`)
+    .setTitle("🙋 تم استلام التذكرة")
+    .setDescription(`${interaction.user} أصبح المسؤول عن متابعة هذا الطلب.`)
+    .setFooter({ text: "HMPD • Ticket Management" })
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed] });
+  return interaction.reply({ embeds: [embed] });
 }
 
 async function unclaimTicket(interaction, ticket) {
@@ -647,7 +701,7 @@ async function unclaimTicket(interaction, ticket) {
   }
 
   await db.unclaimTicket(ticket.id);
-  await updateControlMessage(interaction.channel, null, ticket.ticket_type, Boolean(ticket.robbery_arrived_at));
+  await updateControlMessage(interaction.channel, null, ticket.ticket_type, Boolean(ticket.robbery_arrived_at), ticket.robbery_decision || "pending");
   await interaction.reply(`↩️ ${interaction.user} a libéré le ticket.`);
 }
 
@@ -669,6 +723,127 @@ function memberModal(action) {
 }
 
 
+
+function robberyRefuseModal() {
+  const modal = new ModalBuilder()
+    .setCustomId("robbery_refuse_modal")
+    .setTitle("رفض طلب السطو");
+
+  const reason = new TextInputBuilder()
+    .setCustomId("refusal_reason")
+    .setLabel("سبب الرفض")
+    .setPlaceholder("مثال: عدد الشرطة غير كافٍ / العملية غير متاحة")
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(3)
+    .setMaxLength(500)
+    .setRequired(true);
+
+  modal.addComponents(new ActionRowBuilder().addComponents(reason));
+  return modal;
+}
+
+async function acceptRobbery(interaction, ticket) {
+  if (ticket.ticket_type !== "robbery") {
+    return interaction.reply({ content: "❌ هذه التذكرة ليست طلب سطو.", ephemeral: true });
+  }
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({ content: "❌ ليست لديك صلاحية قبول العملية.", ephemeral: true });
+  }
+  if (!ticket.claimed_by) {
+    return interaction.reply({ content: "❌ يجب استلام التذكرة أولاً.", ephemeral: true });
+  }
+  if (ticket.claimed_by !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    return interaction.reply({ content: `❌ التذكرة مستلمة بواسطة <@${ticket.claimed_by}>.`, ephemeral: true });
+  }
+  if ((ticket.robbery_decision || "pending") !== "pending") {
+    return interaction.reply({ content: "❌ تم اتخاذ قرار بشأن هذه العملية مسبقاً.", ephemeral: true });
+  }
+
+  const deadline = new Date(Date.now() + 20 * 60 * 1000);
+  const updated = await db.acceptRobbery(ticket.id, interaction.user.id, deadline);
+  if (!updated) {
+    return interaction.reply({ content: "❌ تعذر قبول العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
+  }
+
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted");
+
+  const unix = Math.floor(deadline.getTime() / 1000);
+  const embed = new EmbedBuilder()
+    .setTitle("✅ تم قبول طلب السطو")
+    .setDescription([
+      `تم قبول العملية بواسطة ${interaction.user}.`,
+      "",
+      "⏱️ **يجب على جميع أفراد العصابة / المافيا التواجد في موقع العملية خلال 20 دقيقة كحد أقصى.**",
+      `المهلة المتبقية: <t:${unix}:R> — الموعد النهائي: <t:${unix}:t>.`,
+      "",
+      "📍 عند وصول الجميع، يضغط المسؤول على زر **الجميع في الموقع**.",
+      "🔔 سيقوم النظام بإرسال تنبيه عند بقاء 10 دقائق و5 دقائق.",
+      "",
+      "❌ إذا انتهت المهلة دون تأكيد الوصول، سيتم إلغاء العملية وإغلاق التذكرة تلقائياً."
+    ].join("\n"))
+    .setFooter({ text: "HMPD • Robbery Authorization" })
+    .setTimestamp();
+
+  return interaction.reply({ embeds: [embed] });
+}
+
+async function refuseRobbery(interaction, ticket, reason) {
+  if (ticket.ticket_type !== "robbery") {
+    return interaction.reply({ content: "❌ هذه التذكرة ليست طلب سطو.", ephemeral: true });
+  }
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({ content: "❌ ليست لديك صلاحية رفض العملية.", ephemeral: true });
+  }
+  if (!ticket.claimed_by) {
+    return interaction.reply({ content: "❌ يجب استلام التذكرة أولاً.", ephemeral: true });
+  }
+  if ((ticket.robbery_decision || "pending") !== "pending") {
+    return interaction.reply({ content: "❌ تم اتخاذ قرار بشأن هذه العملية مسبقاً.", ephemeral: true });
+  }
+
+  const updated = await db.refuseRobbery(ticket.id, interaction.user.id, reason);
+  if (!updated) {
+    return interaction.reply({ content: "❌ تعذر رفض العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
+  }
+
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "refused");
+
+  const embed = new EmbedBuilder()
+    .setTitle("❌ تم رفض طلب السطو")
+    .setDescription([
+      `تم رفض الطلب بواسطة ${interaction.user}.`,
+      "",
+      `**سبب الرفض:** ${reason}`,
+      "",
+      "سيتم إغلاق التذكرة تلقائياً."
+    ].join("\n"))
+    .setFooter({ text: "HMPD • Robbery Decision" })
+    .setTimestamp();
+
+  await interaction.reply({ embeds: [embed] });
+
+  // Log the refusal before closing.
+  const logChannel = logChannelId ? interaction.guild.channels.cache.get(logChannelId) : null;
+  if (logChannel?.isTextBased()) {
+    const logEmbed = new EmbedBuilder()
+      .setTitle(`❌ رفض عملية #${ticket.id}`)
+      .addFields(
+        { name: "العملية", value: robberyConfig.robberies[ticket.robbery_type]?.label || ticket.robbery_type, inline: true },
+        { name: "العصابة / المافيا", value: ticket.group_name || "غير مسجل", inline: true },
+        { name: "عدد المشاركين", value: String(ticket.criminal_count || "غير مسجل"), inline: true },
+        { name: "تم الرفض بواسطة", value: `${interaction.user}`, inline: true },
+        { name: "السبب", value: reason.slice(0, 1024) }
+      )
+      .setTimestamp();
+    await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
+  }
+
+  await db.closeTicket(ticket.id, interaction.user.id, `رفض العملية: ${reason}`);
+  setTimeout(() => {
+    interaction.channel.delete(`Robbery refused: ${reason}`).catch(() => {});
+  }, 5000);
+}
+
 async function confirmRobberyArrived(interaction, ticket) {
   if (ticket.ticket_type !== "robbery") {
     return interaction.reply({ content: "❌ Ce ticket n'est pas un braquage.", ephemeral: true });
@@ -681,9 +856,9 @@ async function confirmRobberyArrived(interaction, ticket) {
     });
   }
 
-  if (!ticket.claimed_by) {
+  if ((ticket.robbery_decision || "pending") !== "accepted") {
     return interaction.reply({
-      content: "❌ Le braquage doit d'abord être accepté avec le bouton **Prendre**.",
+      content: "❌ يجب قبول العملية أولاً بواسطة زر **قبول العملية**.",
       ephemeral: true
     });
   }
@@ -703,7 +878,7 @@ async function confirmRobberyArrived(interaction, ticket) {
   }
 
   const updated = await db.markRobberyArrived(ticket.id);
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted");
 
   const embed = new EmbedBuilder()
     .setTitle("✅ تم تأكيد وصول الفريق")
@@ -816,7 +991,13 @@ async function executeClose(interaction, ticket, reason) {
         { name: "Fermé par", value: `${interaction.user}`, inline: true },
         { name: "Pris par", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Non assigné", inline: true },
         { name: "Salon", value: `#${interaction.channel.name}`, inline: true },
-        { name: "Motif", value: reason.slice(0, 1024) }
+        { name: "Motif", value: reason.slice(0, 1024) },
+        ...(ticket.ticket_type === "robbery" ? [
+          { name: "Gang / Mafia", value: ticket.group_name || "غير مسجل", inline: true },
+          { name: "Participants", value: String(ticket.criminal_count || "غير مسجل"), inline: true },
+          { name: "Weapons", value: ticket.guns || "غير مسجل", inline: false },
+          { name: "Decision", value: ticket.robbery_decision || "pending", inline: true }
+        ] : [])
       )
       .setTimestamp();
 
@@ -856,5 +1037,8 @@ module.exports = {
   showRobberyMenu,
   createRobberyTicket,
   robberyRequestModal,
-  confirmRobberyArrived
+  confirmRobberyArrived,
+  acceptRobbery,
+  refuseRobbery,
+  robberyRefuseModal
 };

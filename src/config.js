@@ -40,43 +40,50 @@ const robberies = {
     key: "bobcat",
     label: "Bobcat",
     emoji: "🏗️",
-    maxOpen: 3
+    maxOpen: 3,
+    maxCriminals: null
   },
   train: {
     key: "train",
     label: "Train",
     emoji: "🚂",
-    maxOpen: 2
+    maxOpen: 2,
+    maxCriminals: 6
   },
   yacht: {
     key: "yacht",
     label: "Yacht",
     emoji: "🛥️",
-    maxOpen: 2
+    maxOpen: 2,
+    maxCriminals: 6
   },
   labo: {
     key: "labo",
     label: "Labo",
     emoji: "🧪",
-    maxOpen: 2
+    maxOpen: 2,
+    maxCriminals: 6
   },
   central_bank: {
     key: "central_bank",
-    label: "Banque centrale",
+    label: "Pacific Bank",
     emoji: "🏛️",
-    maxOpen: 2
+    maxOpen: 2,
+    maxCriminals: 8
   },
   cargo: {
     key: "cargo",
     label: "Cargo",
     emoji: "✈️",
-    maxOpen: 2
+    maxOpen: 2,
+    maxCriminals: 12
   },
   submarine: {
     key: "submarine",
     label: "Submarine",
     emoji: "🌊",
-    maxOpen: 1
+    maxOpen: 1,
+    maxCriminals: 15
   }
 };
 

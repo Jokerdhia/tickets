@@ -25,7 +25,10 @@ const {
   showRobberyMenu,
   createRobberyTicket,
   robberyRequestModal,
-  confirmRobberyArrived
+  confirmRobberyArrived,
+  acceptRobbery,
+  refuseRobbery,
+  robberyRefuseModal
 } = require("./tickets");
 
 const requiredEnv = [
@@ -62,6 +65,48 @@ async function registerCommands() {
   console.log(`✅ ${commands.length} commandes slash synchronisées.`);
 }
 
+
+
+async function sendRobberyReminders() {
+  try {
+    const tickets = await db.getRobberiesNeedingReminders();
+    const now = Date.now();
+
+    for (const ticket of tickets) {
+      const deadline = new Date(ticket.robbery_deadline).getTime();
+      const remainingMs = deadline - now;
+      const remainingMin = remainingMs / 60000;
+
+      const guild = client.guilds.cache.get(ticket.guild_id);
+      const channel = guild?.channels.cache.get(ticket.channel_id);
+      if (!channel?.isTextBased()) continue;
+
+      if (!ticket.reminder_10_sent && remainingMin <= 10 && remainingMin > 5) {
+        await channel.send({
+          embeds: [{
+            title: "⏰ تنبيه — 10 دقائق متبقية",
+            description: "تبقى حوالي **10 دقائق** لتأكيد وصول جميع أفراد العصابة / المافيا إلى موقع العملية.",
+            timestamp: new Date().toISOString()
+          }]
+        }).catch(() => {});
+        await db.markReminderSent(ticket.id, 10);
+      }
+
+      if (!ticket.reminder_5_sent && remainingMin <= 5 && remainingMin > 0) {
+        await channel.send({
+          embeds: [{
+            title: "🚨 تنبيه أخير — 5 دقائق متبقية",
+            description: "تبقى حوالي **5 دقائق فقط**. إذا لم يتم تأكيد الوصول قبل انتهاء المهلة، سيتم إلغاء العملية تلقائياً.",
+            timestamp: new Date().toISOString()
+          }]
+        }).catch(() => {});
+        await db.markReminderSent(ticket.id, 5);
+      }
+    }
+  } catch (error) {
+    console.error("Erreur rappels braquages:", error);
+  }
+}
 
 async function expireRobberyTickets() {
   try {
@@ -103,7 +148,9 @@ client.once("ready", async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   console.log(`✅ Serveurs : ${client.guilds.cache.size}`);
   await expireRobberyTickets();
+  await sendRobberyReminders();
   setInterval(expireRobberyTickets, 60 * 1000);
+  setInterval(sendRobberyReminders, 60 * 1000);
 });
 
 client.on("interactionCreate", async interaction => {
@@ -159,6 +206,20 @@ client.on("interactionCreate", async interaction => {
         return interaction.showModal(memberModal("remove"));
       }
 
+      if (interaction.customId === "robbery_accept") {
+        return await acceptRobbery(interaction, ticket);
+      }
+
+      if (interaction.customId === "robbery_refuse") {
+        if (!canManageTicket(interaction.member, ticket)) {
+          return interaction.reply({
+            content: "❌ ليست لديك صلاحية رفض العملية.",
+            ephemeral: true
+          });
+        }
+        return interaction.showModal(robberyRefuseModal());
+      }
+
       if (interaction.customId === "robbery_arrived") {
         return await confirmRobberyArrived(interaction, ticket);
       }
@@ -181,6 +242,15 @@ client.on("interactionCreate", async interaction => {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === "robbery_refuse_modal") {
+        const ticket = await getCurrentTicket(interaction);
+        if (!ticket || ticket.status !== "open") {
+          return interaction.reply({ content: "❌ هذه التذكرة ليست مفتوحة.", ephemeral: true });
+        }
+        const reason = interaction.fields.getTextInputValue("refusal_reason");
+        return await refuseRobbery(interaction, ticket, reason);
+      }
+
       if (interaction.customId.startsWith("robbery_request_modal:")) {
         const robberyKey = interaction.customId.split(":")[1];
 

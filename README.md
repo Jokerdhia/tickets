@@ -281,3 +281,32 @@ Si un utilisateur n'a pas le rôle requis, aucun salon n'est créé et le bot lu
 - تأكيد وصول جميع الأعضاء
 - إلغاء السطو تلقائياً عند انتهاء المهلة
 - أزرار الاستلام والإغلاق
+
+
+# V6 — Professional Robbery Workflow
+
+Améliorations principales :
+
+- workflow séparé **Prendre → Accepter / Refuser** ;
+- le timer de 20 minutes démarre uniquement quand la police clique sur **Accepter** ;
+- refus avec motif obligatoire et log automatique ;
+- rappels automatiques à 10 minutes puis 5 minutes ;
+- annulation automatique à l'expiration ;
+- une seule opération active par gang/mafia ;
+- stockage en base du gang/mafia, nombre de participants et armes ;
+- logs enrichis lors de la fermeture ;
+- contrôle du nombre maximal de participants par opération.
+
+Limites configurées :
+
+| Opération | Maximum participants |
+| --- | ---: |
+| Train | 6 |
+| Yacht | 6 |
+| Labo | 6 |
+| Pacific Bank | 8 |
+| Cargo | 12 |
+| Submarine | 15 |
+| Bobcat | non défini |
+
+Les quotas de tickets simultanés restent ceux de la version précédente.

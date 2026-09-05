@@ -22,6 +22,17 @@ async function initDb() {
       robbery_type TEXT,
       robbery_deadline TIMESTAMPTZ,
       robbery_arrived_at TIMESTAMPTZ,
+      group_name TEXT,
+      criminal_count INTEGER,
+      guns TEXT,
+      robbery_decision TEXT NOT NULL DEFAULT 'pending',
+      accepted_by TEXT,
+      accepted_at TIMESTAMPTZ,
+      refused_by TEXT,
+      refused_at TIMESTAMPTZ,
+      refusal_reason TEXT,
+      reminder_10_sent BOOLEAN NOT NULL DEFAULT FALSE,
+      reminder_5_sent BOOLEAN NOT NULL DEFAULT FALSE,
       status TEXT NOT NULL DEFAULT 'open',
       claimed_by TEXT,
       close_reason TEXT,
@@ -35,6 +46,18 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_type TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_deadline TIMESTAMPTZ;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_arrived_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS group_name TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS criminal_count INTEGER;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS guns TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_decision TEXT NOT NULL DEFAULT 'pending';`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS accepted_by TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS refused_by TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS refused_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS refusal_reason TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_10_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_5_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
+
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tickets_owner_status
@@ -54,12 +77,12 @@ async function initDb() {
   console.log("✅ Base Neon PostgreSQL prête.");
 }
 
-async function createTicket({ guildId, channelId, ownerId, ticketType, robberyType = null }) {
+async function createTicket({ guildId, channelId, ownerId, ticketType, robberyType = null, groupName = null, criminalCount = null, guns = null }) {
   const { rows } = await pool.query(
-    `INSERT INTO tickets (guild_id, channel_id, owner_id, ticket_type, robbery_type)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO tickets (guild_id, channel_id, owner_id, ticket_type, robbery_type, group_name, criminal_count, guns)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [guildId, channelId, ownerId, ticketType, robberyType]
+    [guildId, channelId, ownerId, ticketType, robberyType, groupName, criminalCount, guns]
   );
   return rows[0];
 }
@@ -196,11 +219,75 @@ async function getExpiredRobberyTickets() {
      FROM tickets
      WHERE ticket_type = 'robbery'
        AND status = 'open'
+       AND robbery_decision = 'accepted'
        AND robbery_deadline IS NOT NULL
        AND robbery_arrived_at IS NULL
        AND robbery_deadline <= NOW()`
   );
   return rows;
+}
+
+
+async function getOpenRobberyTicketForGroup(guildId, groupName) {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets
+     WHERE guild_id = $1
+       AND ticket_type = 'robbery'
+       AND status = 'open'
+       AND LOWER(TRIM(group_name)) = LOWER(TRIM($2))
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [guildId, groupName]
+  );
+  return rows[0] || null;
+}
+
+async function acceptRobbery(ticketId, acceptedBy, deadline) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET robbery_decision = 'accepted',
+         accepted_by = $2,
+         accepted_at = NOW(),
+         robbery_deadline = $3,
+         reminder_10_sent = FALSE,
+         reminder_5_sent = FALSE
+     WHERE id = $1 AND status = 'open' AND robbery_decision = 'pending'
+     RETURNING *`,
+    [ticketId, acceptedBy, deadline]
+  );
+  return rows[0] || null;
+}
+
+async function refuseRobbery(ticketId, refusedBy, reason) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET robbery_decision = 'refused',
+         refused_by = $2,
+         refused_at = NOW(),
+         refusal_reason = $3
+     WHERE id = $1 AND status = 'open' AND robbery_decision = 'pending'
+     RETURNING *`,
+    [ticketId, refusedBy, reason]
+  );
+  return rows[0] || null;
+}
+
+async function getRobberiesNeedingReminders() {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM tickets
+     WHERE ticket_type = 'robbery'
+       AND status = 'open'
+       AND robbery_decision = 'accepted'
+       AND robbery_deadline IS NOT NULL
+       AND robbery_arrived_at IS NULL`
+  );
+  return rows;
+}
+
+async function markReminderSent(ticketId, kind) {
+  const column = kind === 10 ? "reminder_10_sent" : "reminder_5_sent";
+  await pool.query(`UPDATE tickets SET ${column} = TRUE WHERE id = $1`, [ticketId]);
 }
 
 module.exports = {
@@ -218,5 +305,10 @@ module.exports = {
   getOpenRobberyTicketForUser,
   setRobberyDeadline,
   markRobberyArrived,
-  getExpiredRobberyTickets
+  getExpiredRobberyTickets,
+  getOpenRobberyTicketForGroup,
+  acceptRobbery,
+  refuseRobbery,
+  getRobberiesNeedingReminders,
+  markReminderSent
 };
