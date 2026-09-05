@@ -210,3 +210,25 @@ Pour les tickets de braquage :
 
 Le contrôle d'arrivée est une confirmation Discord par le staff. Le bot ne peut pas vérifier automatiquement
 les positions FiveM sans intégration supplémentaire avec le serveur de jeu.
+
+
+# V4.2 — Panneau simplifié + Racer
+
+Le panneau principal n'affiche plus les boutons **Support** et **Bug**.
+
+Boutons affichés :
+- Demande de braquage
+- Racer / Speed Unit
+- Police / HMPD
+- Réclamation
+- Administration
+
+Pour Racer / Speed Unit, ajouter dans Render :
+
+```env
+CATEGORY_RACER_ID=
+ROLE_RACER_IDS=
+```
+
+`CATEGORY_RACER_ID` = catégorie Discord où les tickets Racer seront créés.  
+`ROLE_RACER_IDS` = rôle(s) staff pouvant voir et gérer ces tickets, séparés par des virgules si nécessaire.

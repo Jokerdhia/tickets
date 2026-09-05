@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "4.1.0",
-  "description": "HMPD ticket bot V4.1 - correction création ticket braquage",
+  "version": "4.2.0",
+  "description": "HMPD ticket bot V4.2 - Racer/Speed Unit, sans Support ni Bug",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

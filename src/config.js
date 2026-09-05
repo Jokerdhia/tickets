@@ -38,6 +38,14 @@ const ticketTypes = {
     categoryId: process.env.CATEGORY_BUG_ID,
     staffRoleIds: csv(process.env.ROLE_BUG_IDS)
   },
+  racer: {
+    key: "racer",
+    label: "Racer / Speed Unit",
+    emoji: "🏎️",
+    description: "Demande liée aux racers ou à la Speed Unit",
+    categoryId: process.env.CATEGORY_RACER_ID,
+    staffRoleIds: csv(process.env.ROLE_RACER_IDS)
+  },
   admin: {
     key: "admin",
     label: "Administration",

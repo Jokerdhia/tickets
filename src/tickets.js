@@ -368,16 +368,15 @@ async function createRobberyTicket(interaction, robberyKey, formData) {
 
 function createPanelEmbed() {
   return new EmbedBuilder()
-    .setTitle("🎫 HMPD SUPPORT")
+    .setTitle("🎫 HMPD TICKETS")
     .setDescription(
       [
-        "Besoin d'aide ? Sélectionne le type de ticket correspondant à ta demande.",
+        "Sélectionne le type de ticket correspondant à ta demande.",
         "",
         "🔫 **Braquage / Illegal** — Demander une opération",
-        "🛠️ **Support** — Aide générale",
+        "🏎️ **Racer / Speed Unit** — Demande liée aux racers / Speed Unit",
         "🚓 **Police / HMPD** — Demande liée à la police",
         "⚠️ **Réclamation** — Signaler une situation",
-        "🐛 **Bug** — Problème technique",
         "🛡️ **Administration** — Demande administrative",
         "",
         "Un salon privé sera créé automatiquement."
@@ -388,21 +387,6 @@ function createPanelEmbed() {
 }
 
 function createPanelRows() {
-  const types = Object.values(ticketTypes);
-  const first = new ActionRowBuilder();
-  const second = new ActionRowBuilder();
-
-  types.forEach((type, index) => {
-    const button = new ButtonBuilder()
-      .setCustomId(`ticket_create:${type.key}`)
-      .setLabel(type.label)
-      .setEmoji(type.emoji)
-      .setStyle(index === 2 ? ButtonStyle.Danger : ButtonStyle.Primary);
-
-    if (index < 3) first.addComponents(button);
-    else second.addComponents(button);
-  });
-
   const robberyRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("ticket_robbery")
@@ -411,7 +395,30 @@ function createPanelRows() {
       .setStyle(ButtonStyle.Danger)
   );
 
-  return [robberyRow, first, second];
+  const mainRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("ticket_create:racer")
+      .setLabel("Racer / Speed Unit")
+      .setEmoji("🏎️")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId("ticket_create:police")
+      .setLabel("Police / HMPD")
+      .setEmoji("🚓")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId("ticket_create:complaint")
+      .setLabel("Réclamation")
+      .setEmoji("⚠️")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("ticket_create:admin")
+      .setLabel("Administration")
+      .setEmoji("🛡️")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return [robberyRow, mainRow];
 }
 
 async function createTicket(interaction, typeKey) {
