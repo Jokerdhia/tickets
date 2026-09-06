@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.3.0",
-  "description": "HMPD Ticket Bot V8.3 Pro - fixed Request Arrival police transition",
+  "version": "8.4.0",
+  "description": "HMPD Ticket Bot V8.4 Pro - robust Confirm Arrival UI synchronization",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

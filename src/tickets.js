@@ -1169,6 +1169,28 @@ async function requestRobberyArrival(interaction, ticket) {
   );
 }
 
+function buildRobberyReadyEmbed(ticket, confirmedById = null) {
+  const robbery = robberyConfig.robberies[ticket.robbery_type];
+  const confirmedAt = ticket.robbery_arrived_at ? new Date(ticket.robbery_arrived_at) : new Date();
+  const acceptedAt = ticket.accepted_at ? new Date(ticket.accepted_at) : confirmedAt;
+  const elapsedSeconds = Math.max(0, Math.floor((confirmedAt.getTime() - acceptedAt.getTime()) / 1000));
+  const confirmer = confirmedById || ticket.robbery_arrived_by;
+
+  return new EmbedBuilder()
+    .setTitle("✅ Robbery Ready")
+    .addFields(
+      { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
+      { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
+      { name: "Participants", value: String(ticket.criminal_count || "—"), inline: true },
+      { name: "Approved By", value: ticket.accepted_by ? `<@${ticket.accepted_by}>` : "—", inline: true },
+      { name: "Arrival Confirmed By", value: confirmer ? `<@${confirmer}>` : "HMPD", inline: true },
+      { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
+      { name: "Status", value: "🟢 READY", inline: true }
+    )
+    .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+    .setTimestamp(confirmedAt);
+}
+
 async function confirmRobberyArrival(interaction, ticket) {
   if (!canManageTicket(interaction.member, ticket)) {
     return interaction.reply({ content: "❌ Only authorized HMPD staff can confirm arrival.", ephemeral: true });
@@ -1179,73 +1201,156 @@ async function confirmRobberyArrival(interaction, ticket) {
   if (!ticket.arrival_requested_at) {
     return interaction.reply({ content: "❌ The requester has not submitted **Request Arrival** yet.", ephemeral: true });
   }
+
+  // Self-heal: DB already says READY but Discord still shows old buttons.
   if (ticket.robbery_arrived_at) {
-    return interaction.reply({ content: "✅ Arrival is already confirmed.", ephemeral: true });
+    const readyEmbed = buildRobberyReadyEmbed(ticket);
+
+    await interaction.update({
+      content: `<@${ticket.owner_id}>`,
+      embeds: [readyEmbed],
+      components: ticketControls(ticket.claimed_by, "robbery", true, "accepted", true),
+      allowedMentions: { users: [ticket.owner_id] }
+    }).catch(async () => {
+      await interaction.message.edit({
+        content: `<@${ticket.owner_id}>`,
+        embeds: [readyEmbed],
+        components: ticketControls(ticket.claimed_by, "robbery", true, "accepted", true),
+        allowedMentions: { users: [ticket.owner_id] }
+      }).catch(() => {});
+    });
+
+    await renameTicketChannelForStage(
+      interaction.channel,
+      "robbery",
+      ticket.claimed_by,
+      true,
+      "accepted",
+      true,
+      ticket.ticket_code
+    );
+
+    return;
   }
+
   if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() <= Date.now()) {
     return interaction.reply({ content: "❌ The 30-minute arrival deadline has expired.", ephemeral: true });
   }
 
   const updated = await db.confirmRobberyArrival(ticket.id, interaction.user.id);
-  await logTimeline(ticket, "ARRIVAL_CONFIRMED", interaction.user.id);
+
+  // If another click/process confirmed it milliseconds earlier, fetch the fresh DB state and self-heal.
   if (!updated) {
+    const fresh = await db.getTicketByChannel(interaction.channelId);
+    if (fresh?.robbery_arrived_at) {
+      const readyEmbed = buildRobberyReadyEmbed(fresh);
+
+      await interaction.update({
+        content: `<@${fresh.owner_id}>`,
+        embeds: [readyEmbed],
+        components: ticketControls(fresh.claimed_by, "robbery", true, "accepted", true),
+        allowedMentions: { users: [fresh.owner_id] }
+      }).catch(async () => {
+        await interaction.message.edit({
+          content: `<@${fresh.owner_id}>`,
+          embeds: [readyEmbed],
+          components: ticketControls(fresh.claimed_by, "robbery", true, "accepted", true),
+          allowedMentions: { users: [fresh.owner_id] }
+        }).catch(() => {});
+      });
+
+      await renameTicketChannelForStage(
+        interaction.channel,
+        "robbery",
+        fresh.claimed_by,
+        true,
+        "accepted",
+        true,
+        fresh.ticket_code
+      );
+
+      return;
+    }
+
     return interaction.reply({ content: "❌ Arrival could not be confirmed.", ephemeral: true });
   }
 
-  const cooldown = await db.setRobberyOperationCooldown(
-    interaction.guildId,
-    ticket.robbery_type,
-    ticket.id,
-    ticket.group_name,
-    robberyOperationCooldownMinutes
+  await logTimeline(updated, "ARRIVAL_CONFIRMED", interaction.user.id);
+
+  // IMPORTANT: update Discord first. Non-critical DB/log actions happen afterwards.
+  const readyEmbed = buildRobberyReadyEmbed(updated, interaction.user.id);
+
+  await interaction.update({
+    content: `<@${updated.owner_id}>`,
+    embeds: [readyEmbed],
+    components: ticketControls(updated.claimed_by, "robbery", true, "accepted", true),
+    allowedMentions: { users: [updated.owner_id] }
+  });
+
+  await renameTicketChannelForStage(
+    interaction.channel,
+    "robbery",
+    updated.claimed_by,
+    true,
+    "accepted",
+    true,
+    updated.ticket_code
   );
 
-  await renameTicketChannelForStage(interaction.channel, "robbery", ticket.claimed_by, true, "accepted", true, ticket.ticket_code);
-
-  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
-  const robbery = robberyConfig.robberies[ticket.robbery_type];
-
-  const embed = new EmbedBuilder()
-    .setTitle("✅ Robbery Ready")
-    .addFields(
-      { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
-      { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
-      { name: "Participants", value: String(ticket.criminal_count || "—"), inline: true },
-      { name: "Approved By", value: ticket.accepted_by ? `<@${ticket.accepted_by}>` : "—", inline: true },
-      { name: "Arrival Confirmed By", value: `${interaction.user}`, inline: true },
-      { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
-      { name: "Status", value: "🟢 READY", inline: true }
-    )
-    .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
-    .setTimestamp();
-
-  const historyChannel = robberyHistoryChannelId ? interaction.guild.channels.cache.get(robberyHistoryChannelId) : null;
-  if (historyChannel?.isTextBased()) {
-    const cooldownUnix = Math.floor(new Date(cooldown.expires_at).getTime() / 1000);
-    const historyEmbed = new EmbedBuilder()
-      .setTitle("📋 Robbery Activity")
-      .addFields(
-        { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
-        { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
-        { name: "Requester", value: `<@${ticket.owner_id}>`, inline: true },
-        { name: "Participants", value: String(ticket.criminal_count || "—"), inline: true },
-        { name: "Approved By", value: ticket.accepted_by ? `<@${ticket.accepted_by}>` : "—", inline: true },
-        { name: "Arrival Confirmed By", value: `${interaction.user}`, inline: true },
-        { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
-        { name: "Cooldown", value: `🔵 ${robberyOperationCooldownMinutes} min • ends <t:${cooldownUnix}:R>`, inline: true },
-        { name: "Status", value: "🟢 READY", inline: true }
-      )
-      .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
-      .setTimestamp();
-    await historyChannel.send({ embeds: [historyEmbed], allowedMentions: { parse: [] } }).catch(() => {});
+  // Non-critical side effects must never leave Discord stuck on the old step.
+  let cooldown = null;
+  try {
+    cooldown = await db.setRobberyOperationCooldown(
+      interaction.guildId,
+      updated.robbery_type,
+      updated.id,
+      updated.group_name,
+      robberyOperationCooldownMinutes
+    );
+  } catch (error) {
+    console.error("Erreur cooldown robbery après Confirm Arrival:", error);
   }
 
-  return interaction.update({
-    content: `<@${ticket.owner_id}>`,
-    embeds: [embed],
-    components: ticketControls(ticket.claimed_by, "robbery", true, "accepted", true),
-    allowedMentions: { users: [ticket.owner_id] }
-  });
+  const historyChannel = robberyHistoryChannelId
+    ? interaction.guild.channels.cache.get(robberyHistoryChannelId)
+    : null;
+
+  if (historyChannel?.isTextBased()) {
+    try {
+      const robbery = robberyConfig.robberies[updated.robbery_type];
+      const confirmedAt = new Date(updated.robbery_arrived_at);
+      const elapsedSeconds = Math.max(
+        0,
+        Math.floor((confirmedAt.getTime() - new Date(updated.accepted_at).getTime()) / 1000)
+      );
+      const cooldownText = cooldown?.expires_at
+        ? `🔵 ${robberyOperationCooldownMinutes} min • ends <t:${Math.floor(new Date(cooldown.expires_at).getTime()/1000)}:R>`
+        : `🔵 ${robberyOperationCooldownMinutes} min`;
+
+      const historyEmbed = new EmbedBuilder()
+        .setTitle("📋 Robbery Activity")
+        .addFields(
+          { name: "Operation", value: robbery?.label || updated.robbery_type || "Unknown", inline: true },
+          { name: "Gang / Mafia", value: updated.group_name || "—", inline: true },
+          { name: "Requester", value: `<@${updated.owner_id}>`, inline: true },
+          { name: "Participants", value: String(updated.criminal_count || "—"), inline: true },
+          { name: "Approved By", value: updated.accepted_by ? `<@${updated.accepted_by}>` : "—", inline: true },
+          { name: "Arrival Confirmed By", value: `<@${interaction.user.id}>`, inline: true },
+          { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
+          { name: "Cooldown", value: cooldownText, inline: true },
+          { name: "Status", value: "🟢 READY", inline: true }
+        )
+        .setFooter({ text: updated.ticket_code || `Ticket #${updated.id}` })
+        .setTimestamp(confirmedAt);
+
+      await historyChannel.send({
+        embeds: [historyEmbed],
+        allowedMentions: { parse: [] }
+      });
+    } catch (error) {
+      console.error("Erreur log Robbery Activity:", error);
+    }
+  }
 }
 
 async function rejectRobberyArrival(interaction, ticket) {

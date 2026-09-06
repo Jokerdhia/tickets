@@ -22,6 +22,7 @@ async function initDb() {
       robbery_type TEXT,
       robbery_deadline TIMESTAMPTZ,
       robbery_arrived_at TIMESTAMPTZ,
+      robbery_arrived_by TEXT,
       arrival_requested_at TIMESTAMPTZ,
       arrival_requested_by TEXT,
       arrival_rejected_at TIMESTAMPTZ,
@@ -58,6 +59,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_requested_by TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_rejected_at TIMESTAMPTZ;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_rejected_by TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_arrived_by TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS group_name TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS criminal_count INTEGER;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS guns TEXT;`);
@@ -541,8 +543,8 @@ async function confirmRobberyArrival(ticketId, confirmedBy) {
   const { rows } = await pool.query(
     `UPDATE tickets
      SET robbery_arrived_at = NOW(),
-         last_staff_action_at = NOW(),
-         arrival_requested_by = COALESCE(arrival_requested_by, $2)
+         robbery_arrived_by = $2,
+         last_staff_action_at = NOW()
      WHERE id = $1
        AND status = 'open'
        AND robbery_decision = 'accepted'

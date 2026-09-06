@@ -508,3 +508,11 @@ A standalone workflow embed is used only for recovery after a Render restart.
 - Confirm Arrival / Reject Arrival appear immediately.
 - Reject Arrival returns the same message to Request Arrival.
 - Confirm Arrival changes the same message to Robbery Ready with Close only.
+
+# V8.4 — Confirm Arrival Sync Fix
+- Discord UI is updated to `Robbery Ready` immediately after DB confirmation.
+- `Confirm Arrival` and `Reject Arrival` disappear instantly.
+- Only `Close` remains after confirmation.
+- If Neon already says arrival is confirmed but Discord still shows old buttons, clicking Confirm Arrival repairs the message automatically instead of returning `Arrival is already confirmed`.
+- Robbery confirmer is now stored in `robbery_arrived_by`.
+- Cooldown/history logging happens after the UI update, so a secondary logging failure cannot leave stale buttons visible.
