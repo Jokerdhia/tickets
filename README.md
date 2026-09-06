@@ -502,3 +502,9 @@ Robbery workflow buttons are now attached directly to the latest action message:
 
 Old workflow buttons are removed before the new action message is sent.
 A standalone workflow embed is used only for recovery after a Render restart.
+
+# V8.3
+- Request Arrival now changes the SAME Discord message immediately to the police review stage.
+- Confirm Arrival / Reject Arrival appear immediately.
+- Reject Arrival returns the same message to Request Arrival.
+- Confirm Arrival changes the same message to Robbery Ready with Close only.

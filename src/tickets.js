@@ -1131,8 +1131,6 @@ async function requestRobberyArrival(interaction, ticket) {
     return interaction.reply({ content: "❌ Arrival request could not be submitted.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", true, ticket.ticket_code, false);
-
   const deadline = new Date(ticket.robbery_deadline).getTime();
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
   const remainingSeconds = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
@@ -1146,20 +1144,29 @@ async function requestRobberyArrival(interaction, ticket) {
       `⌛ الوقت المتبقي: **${Math.floor(remainingSeconds / 60)}m ${remainingSeconds % 60}s**`,
       "",
       "🚓 يجب على الشرطة التحقق من وجود جميع المشاركين في الموقع.",
-      "استخدم **Confirm Arrival** إذا كان الجميع موجوداً، أو **Reject Arrival** إذا لم يكتمل الوصول.",
-      "",
-      "⚠️ رفض الطلب لا يوقف المؤقت؛ يمكن لصاحب الطلب إرسال طلب وصول جديد قبل انتهاء 30 دقيقة."
+      "استخدم **Confirm Arrival** إذا كان الجميع موجوداً، أو **Reject Arrival** إذا لم يكتمل الوصول."
     ].join("\n"))
     .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
     .setTimestamp();
 
   const staffMentions = robberyConfig.staffRoleIds.map(id => `<@&${id}>`).join(" ");
-  return interaction.reply({
+
+  await interaction.update({
     content: `${staffMentions} <@${ticket.owner_id}>`.trim(),
     embeds: [embed],
     components: ticketControls(ticket.claimed_by, "robbery", false, "accepted", true),
     allowedMentions: { roles: robberyConfig.staffRoleIds, users: [ticket.owner_id] }
   });
+
+  await renameTicketChannelForStage(
+    interaction.channel,
+    "robbery",
+    ticket.claimed_by,
+    false,
+    "accepted",
+    true,
+    ticket.ticket_code
+  );
 }
 
 async function confirmRobberyArrival(interaction, ticket) {
@@ -1193,7 +1200,7 @@ async function confirmRobberyArrival(interaction, ticket) {
     robberyOperationCooldownMinutes
   );
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true, ticket.ticket_code, false);
+  await renameTicketChannelForStage(interaction.channel, "robbery", ticket.claimed_by, true, "accepted", true, ticket.ticket_code);
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
   const robbery = robberyConfig.robberies[ticket.robbery_type];
@@ -1233,7 +1240,7 @@ async function confirmRobberyArrival(interaction, ticket) {
     await historyChannel.send({ embeds: [historyEmbed], allowedMentions: { parse: [] } }).catch(() => {});
   }
 
-  return interaction.reply({
+  return interaction.update({
     content: `<@${ticket.owner_id}>`,
     embeds: [embed],
     components: ticketControls(ticket.claimed_by, "robbery", true, "accepted", true),
@@ -1261,7 +1268,7 @@ async function rejectRobberyArrival(interaction, ticket) {
     return interaction.reply({ content: "❌ Arrival request could not be rejected.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code, false);
+  await renameTicketChannelForStage(interaction.channel, "robbery", ticket.claimed_by, false, "accepted", false, ticket.ticket_code);
 
   const deadlineUnix = ticket.robbery_deadline
     ? Math.floor(new Date(ticket.robbery_deadline).getTime() / 1000)
@@ -1279,7 +1286,7 @@ async function rejectRobberyArrival(interaction, ticket) {
     .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
     .setTimestamp();
 
-  return interaction.reply({
+  return interaction.update({
     content: `<@${ticket.owner_id}>`,
     embeds: [embed],
     components: ticketControls(ticket.claimed_by, "robbery", false, "accepted", false),

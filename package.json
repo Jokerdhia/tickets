@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.2.0",
-  "description": "HMPD Ticket Bot V8.2 Pro - workflow buttons attached to the latest action embed",
+  "version": "8.3.0",
+  "description": "HMPD Ticket Bot V8.3 Pro - fixed Request Arrival police transition",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
