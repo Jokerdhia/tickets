@@ -96,6 +96,8 @@ const robberyConfig = {
 
 const supervisorRoleIds = csv(process.env.TICKET_SUPERVISOR_ROLE_IDS);
 const robberyCooldownMinutes = Number(process.env.ROBBERY_COOLDOWN_MINUTES || 30);
+const robberyOperationCooldownMinutes = Number(process.env.ROBBERY_OPERATION_COOLDOWN_MINUTES || 30);
+const robberyHistoryChannelId = process.env.ROBBERY_HISTORY_CHANNEL_ID || process.env.TICKET_LOG_CHANNEL_ID;
 const unclaimedEscalationMinutes = Number(process.env.TICKET_ESCALATION_MINUTES || 10);
 
 module.exports = {
@@ -104,6 +106,8 @@ module.exports = {
   logChannelId: process.env.TICKET_LOG_CHANNEL_ID,
   supervisorRoleIds,
   robberyCooldownMinutes,
+  robberyOperationCooldownMinutes,
+  robberyHistoryChannelId,
   unclaimedEscalationMinutes,
   robberyConfig
 };

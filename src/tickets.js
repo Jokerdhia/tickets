@@ -15,7 +15,9 @@ const {
   ticketTypes,
   logChannelId,
   robberyConfig,
-  robberyCooldownMinutes
+  robberyCooldownMinutes,
+  robberyOperationCooldownMinutes,
+  robberyHistoryChannelId
 } = require("./config");
 
 const db = require("./db");
@@ -142,66 +144,53 @@ function robberySelectMenu() {
 
 async function showRobberyMenu(interaction) {
   if (!robberyConfig.illegalRoleId) {
-    return interaction.reply({
-      content: "❌ ROLE_ILLEGAL_ID n'est pas configuré.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "❌ ROLE_ILLEGAL_ID n'est pas configuré.", ephemeral: true });
   }
-
   if (!interaction.member.roles.cache.has(robberyConfig.illegalRoleId)) {
-    return interaction.reply({
-      content: "❌ هذا القسم مخصص فقط لأعضاء **Illegal**.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "❌ هذا القسم مخصص فقط لأعضاء **Illegal**.", ephemeral: true });
   }
 
+  await db.clearExpiredRobberyOperationCooldowns().catch(() => {});
   const rows = [];
+
   for (const robbery of Object.values(robberyConfig.robberies)) {
     const current = await db.countOpenRobberyTickets(interaction.guildId, robbery.key);
-    const remaining = Math.max(0, robbery.maxOpen - current);
-
+    const cooldown = await db.getRobberyOperationCooldown(interaction.guildId, robbery.key);
     let statusEmoji = "🟢";
     let statusText = "Available";
 
-    if (current >= robbery.maxOpen) {
+    if (cooldown) {
+      const unix = Math.floor(new Date(cooldown.expires_at).getTime() / 1000);
+      statusEmoji = "🔵";
+      statusText = `Cooldown <t:${unix}:R>`;
+    } else if (current >= robbery.maxOpen) {
       statusEmoji = "🔴";
       statusText = "Full";
-    } else if (remaining === 1) {
+    } else if (Math.max(0, robbery.maxOpen - current) === 1) {
       statusEmoji = "🟠";
       statusText = "Limited";
     }
 
-    rows.push(
-      `${statusEmoji} **${robbery.label}**\n` +
-      `> Slots: \`${current}/${robbery.maxOpen}\`  •  Max Players: \`${robbery.maxCriminals ?? "N/A"}\`  •  ${statusText}`
-    );
+    rows.push(`${statusEmoji} **${robbery.label}**\n> Slots: \`${current}/${robbery.maxOpen}\`  •  Max Players: \`${robbery.maxCriminals ?? "N/A"}\`  •  ${statusText}`);
   }
 
   const embed = new EmbedBuilder()
     .setTitle("🔫 Robbery Request Center")
     .setDescription([
-      "اختر العملية التي ترغب في طلبها من القائمة بالأسفل.",
-      "",
-      ...rows,
-      "",
+      "اختر العملية التي ترغب في طلبها من القائمة بالأسفل.", "", ...rows, "",
       "**Status**",
-      "🟢 Available   •   🟠 Limited   •   🔴 Full",
-      "",
+      "🟢 Available   •   🟠 Limited   •   🔴 Full   •   🔵 Cooldown", "",
       "**قواعد الطلب**",
       "• عملية واحدة نشطة لكل Gang / Mafia.",
+      `• كل نوع Braquage يدخل Cooldown لمدة **${robberyOperationCooldownMinutes} دقيقة** بعد تأكيد الوصول.`,
       "• يجب احترام الحد الأقصى لعدد المشاركين.",
-      "• بعد الموافقة لديك **20 دقيقة** للوصول إلى الموقع.",
-      "• عند وصول الجميع يجب على المسؤول الضغط على **All On Site**."
+      "• بعد الموافقة لديك **30 دقيقة** للوصول إلى الموقع.",
+      "• صاحب الطلب يستخدم **Request Arrival** والشرطة تؤكد عبر **Confirm Arrival**."
     ].join("\n"))
     .setFooter({ text: "HMPD • Illegal Operations" })
     .setTimestamp();
 
-  await interaction.reply({
-    embeds: [embed],
-    components: [robberySelectMenu()],
-    ephemeral: true
-  });
-
+  await interaction.reply({ embeds: [embed], components: [robberySelectMenu()], ephemeral: true });
   deleteEphemeralReplyAfter(interaction, 60_000);
 }
 
@@ -339,6 +328,15 @@ if (robberyCooldownMinutes > 0) {
   }
 
   // Recompte juste avant création pour éviter de dépasser le quota.
+  const operationCooldown = await db.getRobberyOperationCooldown(interaction.guildId, robbery.key);
+  if (operationCooldown) {
+    const cooldownUnix = Math.floor(new Date(operationCooldown.expires_at).getTime() / 1000);
+    return interaction.editReply(
+      `🔵 **${robbery.label}** is currently on cooldown.\n` +
+      `Available again <t:${cooldownUnix}:R>.`
+    );
+  }
+
   const currentOpen = await db.countOpenRobberyTickets(interaction.guildId, robbery.key);
 
   if (currentOpen >= robbery.maxOpen) {
@@ -968,6 +966,14 @@ async function confirmRobberyArrival(interaction, ticket) {
     return interaction.reply({ content: "❌ Arrival could not be confirmed.", ephemeral: true });
   }
 
+  const cooldown = await db.setRobberyOperationCooldown(
+    interaction.guildId,
+    ticket.robbery_type,
+    ticket.id,
+    ticket.group_name,
+    robberyOperationCooldownMinutes
+  );
+
   await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true);
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
@@ -986,6 +992,27 @@ async function confirmRobberyArrival(interaction, ticket) {
     )
     .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
     .setTimestamp();
+
+  const historyChannel = robberyHistoryChannelId ? interaction.guild.channels.cache.get(robberyHistoryChannelId) : null;
+  if (historyChannel?.isTextBased()) {
+    const cooldownUnix = Math.floor(new Date(cooldown.expires_at).getTime() / 1000);
+    const historyEmbed = new EmbedBuilder()
+      .setTitle("📋 Robbery Activity")
+      .addFields(
+        { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
+        { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
+        { name: "Requester", value: `<@${ticket.owner_id}>`, inline: true },
+        { name: "Participants", value: String(ticket.criminal_count || "—"), inline: true },
+        { name: "Approved By", value: ticket.accepted_by ? `<@${ticket.accepted_by}>` : "—", inline: true },
+        { name: "Arrival Confirmed By", value: `${interaction.user}`, inline: true },
+        { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
+        { name: "Cooldown", value: `🔵 ${robberyOperationCooldownMinutes} min • ends <t:${cooldownUnix}:R>`, inline: true },
+        { name: "Status", value: "🟢 READY", inline: true }
+      )
+      .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+      .setTimestamp();
+    await historyChannel.send({ embeds: [historyEmbed], allowedMentions: { parse: [] } }).catch(() => {});
+  }
 
   return interaction.reply({
     content: `<@${ticket.owner_id}>`,

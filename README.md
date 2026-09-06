@@ -422,3 +422,13 @@ New robbery arrival workflow:
 9. **Robbery Ready** displays operation, gang, participants, approval officer, confirmation officer and arrival time.
 
 Button labels remain English.
+
+# V7.6 — Robbery Activity & Per-Operation Cooldown
+
+- Dedicated robbery activity room via `ROBBERY_HISTORY_CHANNEL_ID`.
+- On **Confirm Arrival**, it posts Operation, Gang/Mafia, Requester, Participants, Approved By, Arrival Confirmed By, Arrival Time, Cooldown and Status.
+- Every robbery type has its own persistent **30-minute cooldown** after successful arrival confirmation.
+- Example: Bobcat cooldown does not block Train, Yacht, Cargo, etc.
+- Cooldowns are stored in Neon and survive Render restarts.
+- `ROBBERY_OPERATION_COOLDOWN_MINUTES=30` controls the duration.
+- If `ROBBERY_HISTORY_CHANNEL_ID` is missing, the normal ticket log room is used.

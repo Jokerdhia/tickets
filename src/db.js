@@ -121,6 +121,24 @@ await pool.query(`
   );
 `);
 
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS robbery_operation_cooldowns (
+      guild_id TEXT NOT NULL,
+      robbery_type TEXT NOT NULL,
+      ticket_id BIGINT,
+      group_name TEXT,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      PRIMARY KEY (guild_id, robbery_type)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_robbery_operation_cooldowns_expires
+    ON robbery_operation_cooldowns (guild_id, expires_at);
+  `);
+
   console.log("✅ Base Neon PostgreSQL prête.");
 }
 
@@ -516,6 +534,41 @@ async function rejectRobberyArrival(ticketId, rejectedBy) {
   return rows[0] || null;
 }
 
+
+async function setRobberyOperationCooldown(guildId, robberyType, ticketId, groupName, minutes = 30) {
+  const { rows } = await pool.query(
+    `INSERT INTO robbery_operation_cooldowns
+       (guild_id, robbery_type, ticket_id, group_name, started_at, expires_at)
+     VALUES ($1, $2, $3, $4, NOW(), NOW() + ($5::text || ' minutes')::interval)
+     ON CONFLICT (guild_id, robbery_type)
+     DO UPDATE SET
+       ticket_id = EXCLUDED.ticket_id,
+       group_name = EXCLUDED.group_name,
+       started_at = NOW(),
+       expires_at = NOW() + ($5::text || ' minutes')::interval
+     RETURNING *`,
+    [guildId, robberyType, ticketId, groupName, String(minutes)]
+  );
+  return rows[0];
+}
+
+async function getRobberyOperationCooldown(guildId, robberyType) {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM robbery_operation_cooldowns
+     WHERE guild_id = $1
+       AND robbery_type = $2
+       AND expires_at > NOW()
+     LIMIT 1`,
+    [guildId, robberyType]
+  );
+  return rows[0] || null;
+}
+
+async function clearExpiredRobberyOperationCooldowns() {
+  await pool.query(`DELETE FROM robbery_operation_cooldowns WHERE expires_at <= NOW()`);
+}
+
 module.exports = {
   pool,
   initDb,
@@ -552,5 +605,8 @@ module.exports = {
   markEscalated,
   requestRobberyArrival,
   confirmRobberyArrival,
-  rejectRobberyArrival
+  rejectRobberyArrival,
+  setRobberyOperationCooldown,
+  getRobberyOperationCooldown,
+  clearExpiredRobberyOperationCooldowns
 };

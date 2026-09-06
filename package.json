@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "7.5.0",
-  "description": "HMPD Ticket Bot V7.5 - 30-minute police-verified robbery arrival workflow",
+  "version": "7.6.0",
+  "description": "HMPD Ticket Bot V7.6 - robbery activity room and per-operation 30-minute cooldown",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
