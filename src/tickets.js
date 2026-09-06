@@ -193,7 +193,7 @@ async function renameTicketChannelForStage(channel, ticketType, claimedBy, arriv
   }
 }
 
-async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false, ticketCode = null) {
+async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false, ticketCode = null, sendStageMessage = true) {
   await renameTicketChannelForStage(channel, ticketType, claimedBy, arrived, decision, arrivalRequested, ticketCode);
 
   const messages = await channel.messages.fetch({ limit: 50 });
@@ -230,6 +230,12 @@ async function updateControlMessage(channel, claimedBy, ticketType = null, arriv
       await message.edit({ components: [] }).catch(() => {});
     }
   }
+
+  // During a normal interaction, the next-step buttons are attached directly
+  // to the action embed (Claim / Approved / Arrival Requested / Ready).
+  // Recovery after a Render restart can still ask this function to recreate
+  // a standalone workflow message.
+  if (!sendStageMessage) return;
 
   let title = "🎫 Robbery Workflow";
   let description = "Follow the current step below.";
@@ -900,7 +906,8 @@ async function claimTicket(interaction, ticket) {
     Boolean(ticket.robbery_arrived_at),
     ticket.robbery_decision || "pending",
     Boolean(ticket.arrival_requested_at),
-    ticket.ticket_code
+    ticket.ticket_code,
+    false
   );
 
   const embed = new EmbedBuilder()
@@ -912,6 +919,7 @@ async function claimTicket(interaction, ticket) {
   return interaction.reply({
     content: requesterMention(ticket),
     embeds: [embed],
+    components: ticketControls(updated.claimed_by, ticket.ticket_type, Boolean(ticket.robbery_arrived_at), ticket.robbery_decision || "pending", Boolean(ticket.arrival_requested_at)),
     allowedMentions: { users: [ticket.owner_id] }
   });
 }
@@ -1008,7 +1016,7 @@ async function acceptRobbery(interaction, ticket) {
     return interaction.reply({ content: "❌ تعذر قبول العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code, false);
 
   const unix = Math.floor(deadline.getTime() / 1000);
   const embed = new EmbedBuilder()
@@ -1030,6 +1038,7 @@ async function acceptRobbery(interaction, ticket) {
   return interaction.reply({
     content: requesterMention(ticket),
     embeds: [embed],
+    components: ticketControls(ticket.claimed_by, "robbery", false, "accepted", false),
     allowedMentions: { users: [ticket.owner_id] }
   });
 }
@@ -1054,7 +1063,7 @@ async function refuseRobbery(interaction, ticket, reason) {
     return interaction.reply({ content: "❌ تعذر رفض العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "refused");
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "refused", false, ticket.ticket_code, false);
 
   const embed = new EmbedBuilder()
     .setTitle("❌ Robbery Rejected")
@@ -1122,7 +1131,7 @@ async function requestRobberyArrival(interaction, ticket) {
     return interaction.reply({ content: "❌ Arrival request could not be submitted.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", true, ticket.ticket_code);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", true, ticket.ticket_code, false);
 
   const deadline = new Date(ticket.robbery_deadline).getTime();
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
@@ -1148,6 +1157,7 @@ async function requestRobberyArrival(interaction, ticket) {
   return interaction.reply({
     content: `${staffMentions} <@${ticket.owner_id}>`.trim(),
     embeds: [embed],
+    components: ticketControls(ticket.claimed_by, "robbery", false, "accepted", true),
     allowedMentions: { roles: robberyConfig.staffRoleIds, users: [ticket.owner_id] }
   });
 }
@@ -1183,7 +1193,7 @@ async function confirmRobberyArrival(interaction, ticket) {
     robberyOperationCooldownMinutes
   );
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true, ticket.ticket_code);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true, ticket.ticket_code, false);
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
   const robbery = robberyConfig.robberies[ticket.robbery_type];
@@ -1226,6 +1236,7 @@ async function confirmRobberyArrival(interaction, ticket) {
   return interaction.reply({
     content: `<@${ticket.owner_id}>`,
     embeds: [embed],
+    components: ticketControls(ticket.claimed_by, "robbery", true, "accepted", true),
     allowedMentions: { users: [ticket.owner_id] }
   });
 }
@@ -1250,7 +1261,7 @@ async function rejectRobberyArrival(interaction, ticket) {
     return interaction.reply({ content: "❌ Arrival request could not be rejected.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code, false);
 
   const deadlineUnix = ticket.robbery_deadline
     ? Math.floor(new Date(ticket.robbery_deadline).getTime() / 1000)
@@ -1271,6 +1282,7 @@ async function rejectRobberyArrival(interaction, ticket) {
   return interaction.reply({
     content: `<@${ticket.owner_id}>`,
     embeds: [embed],
+    components: ticketControls(ticket.claimed_by, "robbery", false, "accepted", false),
     allowedMentions: { users: [ticket.owner_id] }
   });
 }
@@ -1297,7 +1309,8 @@ async function takeOverTicket(interaction, ticket) {
     Boolean(ticket.robbery_arrived_at),
     ticket.robbery_decision || "pending",
     Boolean(ticket.arrival_requested_at),
-    ticket.ticket_code
+    ticket.ticket_code,
+    false
   );
 
   return interaction.reply({
@@ -1307,6 +1320,13 @@ async function takeOverTicket(interaction, ticket) {
       .setDescription(`${interaction.user} took over this ticket from <@${previous}>.`)
       .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
       .setTimestamp()],
+    components: ticketControls(
+      updated.claimed_by,
+      ticket.ticket_type,
+      Boolean(ticket.robbery_arrived_at),
+      ticket.robbery_decision || "pending",
+      Boolean(ticket.arrival_requested_at)
+    ),
     allowedMentions: { users: [ticket.owner_id, previous] }
   });
 }

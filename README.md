@@ -491,3 +491,14 @@ V8 focuses on reliability, staff control and auditing without a web dashboard.
 - V8 accidentally created a 6-button row after adding Take Over.
 - Police Review and Arrival Verification now use two valid ActionRows.
 - Workflow send errors are now logged instead of being silently ignored.
+
+# V8.2 — Buttons on the latest embed
+Robbery workflow buttons are now attached directly to the latest action message:
+- Claim embed -> Approve / Reject / Release / Transfer / Add Note / Take Over
+- Robbery Approved embed -> Request Arrival / Transfer / Add Note / Take Over / Close
+- Arrival Confirmation Requested embed -> Confirm Arrival / Reject Arrival + staff controls
+- Arrival Rejected embed -> Request Arrival becomes available again
+- Robbery Ready embed -> Close only
+
+Old workflow buttons are removed before the new action message is sent.
+A standalone workflow embed is used only for recovery after a Render restart.

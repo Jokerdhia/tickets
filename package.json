@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.1.0",
-  "description": "HMPD Ticket Bot V8.1 Pro - fixed stage workflow buttons",
+  "version": "8.2.0",
+  "description": "HMPD Ticket Bot V8.2 Pro - workflow buttons attached to the latest action embed",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
