@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.5.0",
-  "description": "HMPD Ticket Bot V8.5 Pro - reliable dedicated robbery cooldown room",
+  "version": "8.7.0",
+  "description": "HMPD Ticket Bot V8.7 Pro - role-labelled workflow buttons with disabled grey states",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

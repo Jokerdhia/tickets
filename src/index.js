@@ -36,7 +36,8 @@ const {
   transferTicket,
   addInternalNote,
   takeOverTicket,
-  ensureTicketControls
+  ensureTicketControls,
+  sendRobberyCooldownNotice
 } = require("./tickets");
 
 const requiredEnv = [
@@ -76,6 +77,20 @@ async function registerCommands() {
 
 
 
+
+
+async function retryPendingCooldownNotices() {
+  try {
+    const pending = await db.getPendingCooldownNotices();
+    for (const ticket of pending) {
+      const guild = client.guilds.cache.get(ticket.guild_id);
+      if (!guild) continue;
+      await sendRobberyCooldownNotice(guild, ticket, ticket.robbery_arrived_by || null);
+    }
+  } catch (error) {
+    console.error("Erreur recovery cooldown notices:", error);
+  }
+}
 
 async function autoReleaseStaleClaims() {
   try {
@@ -259,10 +274,12 @@ client.once("ready", async () => {
   await escalateUnclaimedTickets();
   await autoReleaseStaleClaims();
   await recoverOpenTickets();
+  await retryPendingCooldownNotices();
   setInterval(expireRobberyTickets, 60 * 1000);
   setInterval(sendRobberyReminders, 60 * 1000);
   setInterval(escalateUnclaimedTickets, 60 * 1000);
   setInterval(autoReleaseStaleClaims, 60 * 1000);
+  setInterval(retryPendingCooldownNotices, 60 * 1000);
 });
 
 client.on("interactionCreate", async interaction => {

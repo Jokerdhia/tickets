@@ -161,6 +161,8 @@ await pool.query(`
   ON ticket_timeline (ticket_id, created_at);
 `);
 
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS cooldown_notice_sent_at TIMESTAMPTZ;`);
+
   console.log("✅ Base Neon PostgreSQL prête.");
 }
 
@@ -702,6 +704,31 @@ async function getRobberyStats(guildId) {
   return rows;
 }
 
+
+async function markCooldownNoticeSent(ticketId) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET cooldown_notice_sent_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [ticketId]
+  );
+  return rows[0] || null;
+}
+
+async function getPendingCooldownNotices() {
+  const { rows } = await pool.query(
+    `SELECT *
+     FROM tickets
+     WHERE status = 'open'
+       AND ticket_type = 'robbery'
+       AND robbery_arrived_at IS NOT NULL
+       AND cooldown_notice_sent_at IS NULL
+     ORDER BY robbery_arrived_at ASC`
+  );
+  return rows;
+}
+
 module.exports = {
   pool,
   initDb,
@@ -749,5 +776,7 @@ module.exports = {
   forceReleaseTicket,
   getOpenTickets,
   getStaffStats,
-  getRobberyStats
+  getRobberyStats,
+  markCooldownNoticeSent,
+  getPendingCooldownNotices
 };

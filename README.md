@@ -524,3 +524,20 @@ A standalone workflow embed is used only for recovery after a Render restart.
 - Sends a dedicated `Robbery Cooldown Started` embed after Confirm Arrival.
 - Embed includes operation, Gang/Mafia, participants, confirmer, cooldown and exact available-again time.
 - Render logs now clearly show whether the cooldown message was sent or why it failed.
+
+# V8.6 — Cooldown delivery retry
+- Uses `ROBBERY_COOLDOWN_CHANNEL_ID` or falls back to `ROBBERY_HISTORY_CHANNEL_ID`.
+- Missing cooldown messages are persisted and retried every 60 seconds.
+- Recovery also runs after every Render restart.
+- Render logs show explicit success/failure for the cooldown room.
+
+# V8.7 — Clear Role / Stage Buttons
+- Buttons now clearly show who can use them:
+  - STAFF • Claim / Approve / Reject / Confirm Arrival / Reject Arrival / Transfer / Add Note
+  - REQUESTER • Request Arrival
+  - HIGH GRADE • Take Over
+- Future/unavailable actions are displayed grey and disabled.
+- Current step actions become active automatically.
+- Discord cannot make the exact same shared button active for Staff and grey only for Illegal, so permissions are still enforced server-side on click.
+- After Request Arrival, requester button becomes grey and Police Confirm/Reject become active.
+- After Confirm Arrival, previous workflow buttons are grey and only Close remains active.

@@ -58,9 +58,43 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  // Final step: only Close.
-  if (arrived) {
+  const accepted = decision === "accepted";
+  const refused = decision === "refused";
+
+  // V8.7 UX:
+  // Discord cannot disable a button for one role while keeping it active for another on the same message.
+  // So buttons are disabled according to WORKFLOW STATE, and labels clearly show who is allowed to use them.
+  // Permission checks remain enforced server-side on every click.
+
+  // Final / rejected state.
+  if (arrived || refused) {
     return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("robbery_accept")
+          .setLabel("STAFF • Approve")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_request_arrival")
+          .setLabel("REQUESTER • Request Arrival")
+          .setEmoji("📍")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_confirm_arrival")
+          .setLabel("STAFF • Confirm Arrival")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_reject_arrival")
+          .setLabel("STAFF • Reject Arrival")
+          .setEmoji("❌")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true)
+      ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_close")
@@ -71,25 +105,46 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  // Rejected: only Close.
-  if (decision === "refused") {
-    return [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("ticket_close")
-          .setLabel("Close")
-          .setEmoji("🔒")
-          .setStyle(ButtonStyle.Danger)
-      )
-    ];
-  }
-
-  // Step 1: waiting for staff.
+  // Step 1: waiting for staff claim.
   if (!claimedBy) {
     return [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setEmoji("🙋").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder()
+          .setCustomId("ticket_claim")
+          .setLabel("STAFF • Claim")
+          .setEmoji("🙋")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("robbery_accept")
+          .setLabel("STAFF • Approve")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_request_arrival")
+          .setLabel("REQUESTER • Request Arrival")
+          .setEmoji("📍")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("robbery_confirm_arrival")
+          .setLabel("STAFF • Confirm Arrival")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_reject_arrival")
+          .setLabel("STAFF • Reject Arrival")
+          .setEmoji("❌")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("ticket_close")
+          .setLabel("Close")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Secondary)
       )
     ];
   }
@@ -98,43 +153,152 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
   if (decision === "pending") {
     return [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("robbery_accept").setLabel("Approve").setEmoji("✅").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("robbery_refuse").setLabel("Reject").setEmoji("❌").setStyle(ButtonStyle.Danger)
+        new ButtonBuilder()
+          .setCustomId("ticket_unclaim")
+          .setLabel("STAFF • Release")
+          .setEmoji("↩️")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("robbery_accept")
+          .setLabel("STAFF • Approve")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("robbery_refuse")
+          .setLabel("STAFF • Reject")
+          .setEmoji("❌")
+          .setStyle(ButtonStyle.Danger)
       ),
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder()
+          .setCustomId("robbery_request_arrival")
+          .setLabel("REQUESTER • Request Arrival")
+          .setEmoji("📍")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_confirm_arrival")
+          .setLabel("STAFF • Confirm Arrival")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_reject_arrival")
+          .setLabel("STAFF • Reject Arrival")
+          .setEmoji("❌")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ticket_transfer")
+          .setLabel("STAFF • Transfer")
+          .setEmoji("🔁")
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId("ticket_note")
+          .setLabel("STAFF • Add Note")
+          .setEmoji("📝")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_takeover")
+          .setLabel("HIGH GRADE • Take Over")
+          .setEmoji("🛡️")
+          .setStyle(ButtonStyle.Secondary)
       )
     ];
   }
 
-  // Step 3: approved, requester goes to location.
-  if (decision === "accepted" && !arrivalRequested) {
+  // Step 3: approved - requester action is active, police confirmation stays grey.
+  if (accepted && !arrivalRequested) {
     return [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("robbery_request_arrival").setLabel("Request Arrival").setEmoji("📍").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder()
+          .setCustomId("robbery_request_arrival")
+          .setLabel("REQUESTER • Request Arrival")
+          .setEmoji("📍")
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId("robbery_confirm_arrival")
+          .setLabel("STAFF • Confirm Arrival")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_reject_arrival")
+          .setLabel("STAFF • Reject Arrival")
+          .setEmoji("❌")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ticket_transfer")
+          .setLabel("STAFF • Transfer")
+          .setEmoji("🔁")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_note")
+          .setLabel("STAFF • Add Note")
+          .setEmoji("📝")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_takeover")
+          .setLabel("HIGH GRADE • Take Over")
+          .setEmoji("🛡️")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_close")
+          .setLabel("Close")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Secondary)
       )
     ];
   }
 
-  // Step 4: police verifies arrival.
-  if (decision === "accepted" && arrivalRequested) {
+  // Step 4: requester has requested verification.
+  // Request Arrival becomes grey; police Confirm/Reject become active.
+  if (accepted && arrivalRequested) {
     return [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("robbery_confirm_arrival").setLabel("Confirm Arrival").setEmoji("✅").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("robbery_reject_arrival").setLabel("Reject Arrival").setEmoji("❌").setStyle(ButtonStyle.Danger)
+        new ButtonBuilder()
+          .setCustomId("robbery_request_arrival")
+          .setLabel("REQUESTER • Arrival Requested")
+          .setEmoji("📍")
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(true),
+        new ButtonBuilder()
+          .setCustomId("robbery_confirm_arrival")
+          .setLabel("STAFF • Confirm Arrival")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("robbery_reject_arrival")
+          .setLabel("STAFF • Reject Arrival")
+          .setEmoji("❌")
+          .setStyle(ButtonStyle.Danger)
       ),
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder()
+          .setCustomId("ticket_transfer")
+          .setLabel("STAFF • Transfer")
+          .setEmoji("🔁")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_note")
+          .setLabel("STAFF • Add Note")
+          .setEmoji("📝")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_takeover")
+          .setLabel("HIGH GRADE • Take Over")
+          .setEmoji("🛡️")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("ticket_close")
+          .setLabel("Close")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Secondary)
       )
     ];
   }
@@ -1199,6 +1363,65 @@ async function resolveRobberyCooldownChannel(guild) {
   return channel;
 }
 
+async function sendRobberyCooldownNotice(guild, ticket, confirmedById = null) {
+  if (!ticket || ticket.ticket_type !== "robbery" || !ticket.robbery_arrived_at) return false;
+  if (ticket.cooldown_notice_sent_at) return true;
+
+  const channel = await resolveRobberyCooldownChannel(guild);
+  if (!channel) {
+    console.error(`❌ Cooldown room unavailable for ${ticket.ticket_code || ticket.id}.`);
+    return false;
+  }
+
+  let cooldown = null;
+  try {
+    cooldown = await db.getRobberyOperationCooldown(ticket.guild_id, ticket.robbery_type);
+    if (!cooldown) {
+      cooldown = await db.setRobberyOperationCooldown(
+        ticket.guild_id,
+        ticket.robbery_type,
+        ticket.id,
+        ticket.group_name,
+        robberyOperationCooldownMinutes
+      );
+    }
+  } catch (error) {
+    console.error("❌ Cooldown DB error:", error);
+  }
+
+  const robbery = robberyConfig.robberies[ticket.robbery_type];
+  const confirmedAt = new Date(ticket.robbery_arrived_at);
+  const acceptedAt = ticket.accepted_at ? new Date(ticket.accepted_at) : confirmedAt;
+  const elapsedSeconds = Math.max(0, Math.floor((confirmedAt - acceptedAt) / 1000));
+  const confirmer = confirmedById || ticket.robbery_arrived_by;
+
+  const embed = new EmbedBuilder()
+    .setTitle("⏳ Robbery Cooldown Started")
+    .addFields(
+      { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
+      { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
+      { name: "Participants", value: String(ticket.criminal_count || "—"), inline: true },
+      { name: "Requester", value: `<@${ticket.owner_id}>`, inline: true },
+      { name: "Arrival Confirmed By", value: confirmer ? `<@${confirmer}>` : "HMPD", inline: true },
+      { name: "Cooldown", value: cooldown?.expires_at
+        ? `🔵 ${robberyOperationCooldownMinutes} min • ends <t:${Math.floor(new Date(cooldown.expires_at).getTime()/1000)}:R>`
+        : `🔵 ${robberyOperationCooldownMinutes} min`, inline: true },
+      { name: "Status", value: "🔵 COOLDOWN ACTIVE", inline: true }
+    )
+    .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+    .setTimestamp(confirmedAt);
+
+  try {
+    await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    await db.markCooldownNoticeSent(ticket.id).catch(() => {});
+    console.log(`✅ Cooldown sent to #${channel.name} (${channel.id})`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to send cooldown to ${channel.id}:`, error);
+    return false;
+  }
+}
+
 function buildRobberyReadyEmbed(ticket, confirmedById = null) {
   const robbery = robberyConfig.robberies[ticket.robbery_type];
   const confirmedAt = ticket.robbery_arrived_at ? new Date(ticket.robbery_arrived_at) : new Date();
@@ -1260,6 +1483,7 @@ async function confirmRobberyArrival(interaction, ticket) {
       ticket.ticket_code
     );
 
+    await sendRobberyCooldownNotice(interaction.guild, ticket, ticket.robbery_arrived_by || interaction.user.id);
     return;
   }
 
@@ -1327,65 +1551,9 @@ async function confirmRobberyArrival(interaction, ticket) {
     updated.ticket_code
   );
 
-  // Non-critical side effects must never leave Discord stuck on the old step.
-  let cooldown = null;
-  try {
-    cooldown = await db.setRobberyOperationCooldown(
-      interaction.guildId,
-      updated.robbery_type,
-      updated.id,
-      updated.group_name,
-      robberyOperationCooldownMinutes
-    );
-  } catch (error) {
-    console.error("Erreur cooldown robbery après Confirm Arrival:", error);
-  }
+  const freshConfirmed = await db.getTicketByChannel(interaction.channelId).catch(() => updated);
+  await sendRobberyCooldownNotice(interaction.guild, freshConfirmed || updated, interaction.user.id);
 
-  const historyChannel = await resolveRobberyCooldownChannel(interaction.guild);
-
-  if (historyChannel) {
-    try {
-      const robbery = robberyConfig.robberies[updated.robbery_type];
-      const confirmedAt = new Date(updated.robbery_arrived_at);
-      const elapsedSeconds = Math.max(
-        0,
-        Math.floor((confirmedAt.getTime() - new Date(updated.accepted_at).getTime()) / 1000)
-      );
-      const cooldownText = cooldown?.expires_at
-        ? `🔵 ${robberyOperationCooldownMinutes} min • ends <t:${Math.floor(new Date(cooldown.expires_at).getTime()/1000)}:R>`
-        : `🔵 ${robberyOperationCooldownMinutes} min`;
-
-      const historyEmbed = new EmbedBuilder()
-        .setTitle("⏳ Robbery Cooldown Started")
-        .addFields(
-          { name: "Operation", value: robbery?.label || updated.robbery_type || "Unknown", inline: true },
-          { name: "Gang / Mafia", value: updated.group_name || "—", inline: true },
-          { name: "Requester", value: `<@${updated.owner_id}>`, inline: true },
-          { name: "Participants", value: String(updated.criminal_count || "—"), inline: true },
-          { name: "Approved By", value: updated.accepted_by ? `<@${updated.accepted_by}>` : "—", inline: true },
-          { name: "Arrival Confirmed By", value: `<@${interaction.user.id}>`, inline: true },
-          { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
-          { name: "Cooldown", value: cooldownText, inline: true },
-          { name: "Status", value: "🔵 COOLDOWN ACTIVE", inline: true },
-          ...(cooldown?.expires_at ? [
-            { name: "Available Again", value: `<t:${Math.floor(new Date(cooldown.expires_at).getTime()/1000)}:F>`, inline: false }
-          ] : [])
-        )
-        .setFooter({ text: updated.ticket_code || `Ticket #${updated.id}` })
-        .setTimestamp(confirmedAt);
-
-      await historyChannel.send({
-        embeds: [historyEmbed],
-        allowedMentions: { parse: [] }
-      });
-
-      console.log(`✅ Cooldown envoyé dans #${historyChannel.name} (${historyChannel.id}) pour ${updated.robbery_type}.`);
-    } catch (error) {
-      console.error(`❌ Erreur envoi salon cooldown ${historyChannel.id}:`, error);
-    }
-  } else {
-    console.error("❌ Aucun salon cooldown utilisable trouvé.");
-  }
 }
 
 async function rejectRobberyArrival(interaction, ticket) {
@@ -1743,5 +1911,6 @@ module.exports = {
   addInternalNote,
   takeOverTicket,
   ensureTicketControls,
-  canSuperviseTicket
+  canSuperviseTicket,
+  sendRobberyCooldownNotice
 };
