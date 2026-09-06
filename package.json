@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.0.0",
-  "description": "HMPD Ticket Bot V8 Pro - timeline, recovery, takeover, auto-release, temporary blacklist and advanced stats",
+  "version": "8.1.0",
+  "description": "HMPD Ticket Bot V8.1 Pro - fixed stage workflow buttons",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

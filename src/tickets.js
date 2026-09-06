@@ -57,7 +57,7 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  // Final step: once the arrival is confirmed, only Close remains.
+  // Final step: only Close.
   if (arrived) {
     return [
       new ActionRowBuilder().addComponents(
@@ -70,7 +70,7 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  // Rejected robbery: only Close remains.
+  // Rejected: only Close.
   if (decision === "refused") {
     return [
       new ActionRowBuilder().addComponents(
@@ -83,24 +83,25 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  // Step 1: waiting for a staff member to claim.
+  // Step 1: waiting for staff.
   if (!claimedBy) {
     return [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setEmoji("🙋").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
       )
     ];
   }
 
-  // Step 2: claimed, waiting for police decision.
+  // Step 2: police review.
   if (decision === "pending") {
     return [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("robbery_accept").setLabel("Approve").setEmoji("✅").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("robbery_refuse").setLabel("Reject").setEmoji("❌").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId("robbery_refuse").setLabel("Reject").setEmoji("❌").setStyle(ButtonStyle.Danger)
+      ),
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary)
@@ -108,26 +109,30 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  // Step 3: approved; requester must ask for arrival verification.
+  // Step 3: approved, requester goes to location.
   if (decision === "accepted" && !arrivalRequested) {
     return [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("robbery_request_arrival").setLabel("Request Arrival").setEmoji("📍").setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
       )
     ];
   }
 
-  // Step 4: requester asked for verification; police must confirm or reject.
+  // Step 4: police verifies arrival.
   if (decision === "accepted" && arrivalRequested) {
     return [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("robbery_confirm_arrival").setLabel("Confirm Arrival").setEmoji("✅").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("robbery_reject_arrival").setLabel("Reject Arrival").setEmoji("❌").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId("robbery_reject_arrival").setLabel("Reject Arrival").setEmoji("❌").setStyle(ButtonStyle.Danger)
+      ),
+      new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
       )
     ];
@@ -274,10 +279,15 @@ async function updateControlMessage(channel, claimedBy, ticketType = null, arriv
     .setFooter({ text: "HMPD • Robbery Workflow" })
     .setTimestamp();
 
-  await channel.send({
-    embeds: [stageEmbed],
-    components: ticketControls(claimedBy, ticketType, arrived, decision, arrivalRequested)
-  }).catch(() => {});
+  try {
+    await channel.send({
+      embeds: [stageEmbed],
+      components: ticketControls(claimedBy, ticketType, arrived, decision, arrivalRequested)
+    });
+  } catch (error) {
+    console.error("Erreur envoi boutons workflow robbery:", error);
+    throw error;
+  }
 }
 
 async function ensureTicketControls(channel, ticket) {

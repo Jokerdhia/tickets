@@ -484,3 +484,10 @@ V8 focuses on reliability, staff control and auditing without a web dashboard.
 - `TICKET_WARNING_BLOCK_THRESHOLD=3`
 - `TICKET_WARNING_BLOCK_MINUTES=1440`
 - Existing `TICKET_SUPERVISOR_ROLE_IDS` controls Take Over and supervisor commands.
+
+# V8.1 Fix
+- Fixed robbery workflow buttons disappearing after Claim.
+- Discord allows a maximum of 5 buttons per ActionRow.
+- V8 accidentally created a 6-button row after adding Take Over.
+- Police Review and Arrival Verification now use two valid ActionRows.
+- Workflow send errors are now logged instead of being silently ignored.
