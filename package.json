@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "7.6.0",
-  "description": "HMPD Ticket Bot V7.6 - robbery activity room and per-operation 30-minute cooldown",
+  "version": "8.0.0",
+  "description": "HMPD Ticket Bot V8 Pro - timeline, recovery, takeover, auto-release, temporary blacklist and advanced stats",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

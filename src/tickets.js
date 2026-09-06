@@ -17,11 +17,17 @@ const {
   robberyConfig,
   robberyCooldownMinutes,
   robberyOperationCooldownMinutes,
-  robberyHistoryChannelId
+  robberyHistoryChannelId,
+  supervisorRoleIds
 } = require("./config");
 
 const db = require("./db");
 const { buildTranscript } = require("./transcript");
+
+async function logTimeline(ticket, action, actorId = null, details = null) {
+  if (!ticket?.id) return;
+  await db.addTimelineEvent(ticket.id, action, actorId, details).catch(() => {});
+}
 
 function requesterMention(ticket) {
   return ticket?.owner_id ? `<@${ticket.owner_id}>` : "";
@@ -51,41 +57,83 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
     ];
   }
 
-  const accepted = decision === "accepted";
-  const refused = decision === "refused";
+  // Final step: once the arrival is confirmed, only Close remains.
+  if (arrived) {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ticket_close")
+          .setLabel("Close")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Danger)
+      )
+    ];
+  }
 
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("ticket_claim").setLabel(claimedBy ? "Claimed" : "Claim").setEmoji("🙋").setStyle(ButtonStyle.Success).setDisabled(Boolean(claimedBy) || refused),
-    new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary).setDisabled(!claimedBy || accepted || refused),
-    new ButtonBuilder().setCustomId("robbery_accept").setLabel("Approve").setEmoji("✅").setStyle(ButtonStyle.Success).setDisabled(!claimedBy || accepted || refused),
-    new ButtonBuilder().setCustomId("robbery_refuse").setLabel("Reject").setEmoji("❌").setStyle(ButtonStyle.Danger).setDisabled(!claimedBy || accepted || refused),
-    new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
-  );
+  // Rejected robbery: only Close remains.
+  if (decision === "refused") {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ticket_close")
+          .setLabel("Close")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Danger)
+      )
+    ];
+  }
 
-  const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("robbery_request_arrival")
-      .setLabel(arrived ? "Arrival Confirmed" : (arrivalRequested ? "Arrival Requested" : "Request Arrival"))
-      .setEmoji("📍")
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(!accepted || arrived || arrivalRequested),
-    new ButtonBuilder()
-      .setCustomId("robbery_confirm_arrival")
-      .setLabel("Confirm Arrival")
-      .setEmoji("✅")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!accepted || arrived || !arrivalRequested),
-    new ButtonBuilder()
-      .setCustomId("robbery_reject_arrival")
-      .setLabel("Reject Arrival")
-      .setEmoji("❌")
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(!accepted || arrived || !arrivalRequested),
-    new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary).setDisabled(!claimedBy || refused),
-    new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary)
-  );
+  // Step 1: waiting for a staff member to claim.
+  if (!claimedBy) {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setEmoji("🙋").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
+      )
+    ];
+  }
 
-  return [row1, row2];
+  // Step 2: claimed, waiting for police decision.
+  if (decision === "pending") {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("robbery_accept").setLabel("Approve").setEmoji("✅").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("robbery_refuse").setLabel("Reject").setEmoji("❌").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_takeover").setLabel("Take Over").setEmoji("🛡️").setStyle(ButtonStyle.Secondary)
+      )
+    ];
+  }
+
+  // Step 3: approved; requester must ask for arrival verification.
+  if (decision === "accepted" && !arrivalRequested) {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("robbery_request_arrival").setLabel("Request Arrival").setEmoji("📍").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
+      )
+    ];
+  }
+
+  // Step 4: requester asked for verification; police must confirm or reject.
+  if (decision === "accepted" && arrivalRequested) {
+    return [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("robbery_confirm_arrival").setLabel("Confirm Arrival").setEmoji("✅").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("robbery_reject_arrival").setLabel("Reject Arrival").setEmoji("❌").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
+      )
+    ];
+  }
+
+  return [];
 }
 
 function memberHasAnyRole(member, roleIds) {
@@ -104,24 +152,167 @@ function canManageTicket(member, ticket) {
   );
 }
 
+function canSuperviseTicket(member) {
+  return Boolean(
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
+    member.permissions.has(PermissionFlagsBits.ManageGuild) ||
+    supervisorRoleIds.some(id => member.roles.cache.has(id))
+  );
+}
+
 function canCloseTicket(member, ticket) {
   return member.id === ticket.owner_id || canManageTicket(member, ticket);
 }
 
-async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false) {
-  const messages = await channel.messages.fetch({ limit: 30 });
-  const controlMessage = messages.find(m =>
-    m.author.id === channel.client.user.id &&
-    m.components.some(row =>
-      row.components.some(c => c.customId === "ticket_claim")
-    )
-  );
+async function renameTicketChannelForStage(channel, ticketType, claimedBy, arrived, decision, arrivalRequested, ticketCode = null) {
+  if (ticketType !== "robbery") return;
 
-  if (controlMessage) {
-    await controlMessage.edit({ components: ticketControls(claimedBy, ticketType, arrived, decision, arrivalRequested) }).catch(() => {});
+  let prefix = "wait";
+  if (arrived) prefix = "done";
+  else if (decision === "refused") prefix = "rejected";
+  else if (!claimedBy) prefix = "wait";
+  else if (decision === "pending") prefix = "review";
+  else if (decision === "accepted" && !arrivalRequested) prefix = "travel";
+  else if (decision === "accepted" && arrivalRequested) prefix = "verify";
+
+  const base = (ticketCode || channel.name || "robbery")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 70);
+
+  const name = `${prefix}-${base}`.slice(0, 95);
+  if (channel.name !== name) {
+    await channel.setName(name, "HMPD ticket stage update").catch(() => {});
   }
 }
 
+async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false, ticketCode = null) {
+  await renameTicketChannelForStage(channel, ticketType, claimedBy, arrived, decision, arrivalRequested, ticketCode);
+
+  const messages = await channel.messages.fetch({ limit: 50 });
+
+  const controlMessages = messages.filter(m =>
+    m.author.id === channel.client.user.id &&
+    m.components.some(row => row.components.length > 0)
+  );
+
+  // For normal tickets, keep the existing compact behavior.
+  if (ticketType !== "robbery") {
+    const controlMessage = controlMessages.find(m =>
+      m.components.some(row => row.components.some(c => c.customId === "ticket_claim"))
+    );
+    if (controlMessage) {
+      await controlMessage.edit({
+        components: ticketControls(claimedBy, ticketType, arrived, decision, arrivalRequested)
+      }).catch(() => {});
+    }
+    return;
+  }
+
+  // Remove buttons from previous robbery stage messages.
+  for (const message of controlMessages.values()) {
+    const hasTicketControl = message.components.some(row =>
+      row.components.some(c =>
+        c.customId && (
+          c.customId.startsWith("ticket_") ||
+          c.customId.startsWith("robbery_")
+        )
+      )
+    );
+    if (hasTicketControl) {
+      await message.edit({ components: [] }).catch(() => {});
+    }
+  }
+
+  let title = "🎫 Robbery Workflow";
+  let description = "Follow the current step below.";
+
+  if (arrived) {
+    title = "🏁 Operation Finished";
+    description = [
+      "✅ Arrival has been confirmed by HMPD.",
+      "",
+      "The robbery workflow is complete.",
+      "Use **Close** when the operation/ticket is finished."
+    ].join("\n");
+  } else if (decision === "refused") {
+    title = "❌ Robbery Rejected";
+    description = "The request has been rejected. The only remaining action is **Close**.";
+  } else if (!claimedBy) {
+    title = "🟡 Step 1 • Waiting for Staff";
+    description = "A staff member must use **Claim** before the request can be reviewed.";
+  } else if (decision === "pending") {
+    title = "👮 Step 2 • Police Review";
+    description = [
+      "The ticket has been claimed.",
+      "",
+      "HMPD must now choose **Approve** or **Reject**."
+    ].join("\n");
+  } else if (decision === "accepted" && !arrivalRequested) {
+    title = "⏱️ Step 3 • Travel to Robbery";
+    description = [
+      "✅ The robbery is approved.",
+      "",
+      "All criminals must reach the location within **30 minutes**.",
+      "When everybody is on site, the requester uses **Request Arrival**."
+    ].join("\n");
+  } else if (decision === "accepted" && arrivalRequested) {
+    title = "📍 Step 4 • Arrival Verification";
+    description = [
+      "The requester says everyone is on site.",
+      "",
+      "HMPD must use **Confirm Arrival** or **Reject Arrival**.",
+      "Rejecting does not reset the 30-minute timer."
+    ].join("\n");
+  }
+
+  const stageEmbed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .setFooter({ text: "HMPD • Robbery Workflow" })
+    .setTimestamp();
+
+  await channel.send({
+    embeds: [stageEmbed],
+    components: ticketControls(claimedBy, ticketType, arrived, decision, arrivalRequested)
+  }).catch(() => {});
+}
+
+async function ensureTicketControls(channel, ticket) {
+  if (!channel?.isTextBased() || ticket.ticket_type !== "robbery") return;
+
+  const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+  if (!messages) return;
+
+  const hasActiveControls = messages.some(m =>
+    m.author.id === channel.client.user.id &&
+    m.components.some(row => row.components.some(c => c.customId))
+  );
+
+  if (!hasActiveControls) {
+    await updateControlMessage(
+      channel,
+      ticket.claimed_by,
+      "robbery",
+      Boolean(ticket.robbery_arrived_at),
+      ticket.robbery_decision || "pending",
+      Boolean(ticket.arrival_requested_at),
+      ticket.ticket_code
+    );
+  } else {
+    await renameTicketChannelForStage(
+      channel,
+      "robbery",
+      ticket.claimed_by,
+      Boolean(ticket.robbery_arrived_at),
+      ticket.robbery_decision || "pending",
+      Boolean(ticket.arrival_requested_at),
+      ticket.ticket_code
+    );
+  }
+}
 
 function robberySelectMenu() {
   const menu = new StringSelectMenuBuilder()
@@ -691,12 +882,15 @@ async function claimTicket(interaction, ticket) {
   }
 
   const updated = await db.claimTicket(ticket.id, interaction.user.id);
+  await logTimeline(ticket, "CLAIMED", interaction.user.id);
   await updateControlMessage(
     interaction.channel,
     updated.claimed_by,
     ticket.ticket_type,
     Boolean(ticket.robbery_arrived_at),
-    ticket.robbery_decision || "pending"
+    ticket.robbery_decision || "pending",
+    Boolean(ticket.arrival_requested_at),
+    ticket.ticket_code
   );
 
   const embed = new EmbedBuilder()
@@ -738,6 +932,7 @@ async function unclaimTicket(interaction, ticket) {
   }
 
   await db.unclaimTicket(ticket.id);
+  await logTimeline(ticket, "RELEASED", interaction.user.id);
   await updateControlMessage(interaction.channel, null, ticket.ticket_type, Boolean(ticket.robbery_arrived_at), ticket.robbery_decision || "pending");
   await interaction.reply(`↩️ ${interaction.user} a libéré le ticket.`);
 }
@@ -798,11 +993,12 @@ async function acceptRobbery(interaction, ticket) {
 
   const deadline = new Date(Date.now() + 30 * 60 * 1000);
   const updated = await db.acceptRobbery(ticket.id, interaction.user.id, deadline);
+  await logTimeline(ticket, "APPROVED", interaction.user.id, "30-minute arrival timer started");
   if (!updated) {
     return interaction.reply({ content: "❌ تعذر قبول العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted");
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code);
 
   const unix = Math.floor(deadline.getTime() / 1000);
   const embed = new EmbedBuilder()
@@ -843,6 +1039,7 @@ async function refuseRobbery(interaction, ticket, reason) {
   }
 
   const updated = await db.refuseRobbery(ticket.id, interaction.user.id, reason);
+  await logTimeline(ticket, "REJECTED", interaction.user.id, reason);
   if (!updated) {
     return interaction.reply({ content: "❌ تعذر رفض العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
   }
@@ -910,11 +1107,12 @@ async function requestRobberyArrival(interaction, ticket) {
   }
 
   const updated = await db.requestRobberyArrival(ticket.id, interaction.user.id);
+  await logTimeline(ticket, "ARRIVAL_REQUESTED", interaction.user.id);
   if (!updated) {
     return interaction.reply({ content: "❌ Arrival request could not be submitted.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", true);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", true, ticket.ticket_code);
 
   const deadline = new Date(ticket.robbery_deadline).getTime();
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
@@ -962,6 +1160,7 @@ async function confirmRobberyArrival(interaction, ticket) {
   }
 
   const updated = await db.confirmRobberyArrival(ticket.id, interaction.user.id);
+  await logTimeline(ticket, "ARRIVAL_CONFIRMED", interaction.user.id);
   if (!updated) {
     return interaction.reply({ content: "❌ Arrival could not be confirmed.", ephemeral: true });
   }
@@ -974,7 +1173,7 @@ async function confirmRobberyArrival(interaction, ticket) {
     robberyOperationCooldownMinutes
   );
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true, ticket.ticket_code);
 
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
   const robbery = robberyConfig.robberies[ticket.robbery_type];
@@ -1036,11 +1235,12 @@ async function rejectRobberyArrival(interaction, ticket) {
   }
 
   const updated = await db.rejectRobberyArrival(ticket.id, interaction.user.id);
+  await logTimeline(ticket, "ARRIVAL_REJECTED", interaction.user.id);
   if (!updated) {
     return interaction.reply({ content: "❌ Arrival request could not be rejected.", ephemeral: true });
   }
 
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false);
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false, ticket.ticket_code);
 
   const deadlineUnix = ticket.robbery_deadline
     ? Math.floor(new Date(ticket.robbery_deadline).getTime() / 1000)
@@ -1062,6 +1262,42 @@ async function rejectRobberyArrival(interaction, ticket) {
     content: `<@${ticket.owner_id}>`,
     embeds: [embed],
     allowedMentions: { users: [ticket.owner_id] }
+  });
+}
+
+async function takeOverTicket(interaction, ticket) {
+  if (!canSuperviseTicket(interaction.member)) {
+    return interaction.reply({ content: "❌ Only Supervisor / High Grade can use **Take Over**.", ephemeral: true });
+  }
+  if (!ticket.claimed_by) {
+    return interaction.reply({ content: "❌ This ticket is not currently claimed.", ephemeral: true });
+  }
+  if (ticket.claimed_by === interaction.user.id) {
+    return interaction.reply({ content: "✅ You already own this ticket.", ephemeral: true });
+  }
+
+  const previous = ticket.claimed_by;
+  const updated = await db.transferTicket(ticket.id, interaction.user.id);
+  await logTimeline(ticket, "TAKE_OVER", interaction.user.id, `Previous staff: ${previous}`);
+
+  await updateControlMessage(
+    interaction.channel,
+    updated.claimed_by,
+    ticket.ticket_type,
+    Boolean(ticket.robbery_arrived_at),
+    ticket.robbery_decision || "pending",
+    Boolean(ticket.arrival_requested_at),
+    ticket.ticket_code
+  );
+
+  return interaction.reply({
+    content: `<@${ticket.owner_id}>`,
+    embeds: [new EmbedBuilder()
+      .setTitle("🛡️ Ticket Taken Over")
+      .setDescription(`${interaction.user} took over this ticket from <@${previous}>.`)
+      .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+      .setTimestamp()],
+    allowedMentions: { users: [ticket.owner_id, previous] }
   });
 }
 
@@ -1111,6 +1347,7 @@ async function transferTicket(interaction, ticket, userId) {
   }
 
   const updated = await db.transferTicket(ticket.id, userId);
+  await logTimeline(ticket, "TRANSFERRED", interaction.user.id, `New staff: ${userId}`);
   await updateControlMessage(
     interaction.channel,
     updated.claimed_by,
@@ -1136,6 +1373,7 @@ async function addInternalNote(interaction, ticket, note) {
   }
 
   await db.addTicketNote(ticket.id, interaction.user.id, note);
+  await logTimeline(ticket, "NOTE_ADDED", interaction.user.id, note.slice(0, 250));
 
   const logChannel = logChannelId ? interaction.guild.channels.cache.get(logChannelId) : null;
   if (logChannel?.isTextBased()) {
@@ -1229,6 +1467,8 @@ async function executeClose(interaction, ticket, reason) {
   await interaction.deferReply();
 
   const internalNotes = await db.getTicketNotes(ticket.id).catch(() => []);
+  await logTimeline(ticket, "CLOSE_REQUESTED", interaction.user.id, reason);
+  const timeline = await db.getTicketTimeline(ticket.id).catch(() => []);
 
   const transcript = await buildTranscript(interaction.channel, ticket).catch(error => {
     console.error("Erreur transcript:", error);
@@ -1268,6 +1508,9 @@ async function executeClose(interaction, ticket, reason) {
         ] : []),
         { name: "Created", value: ticket.created_at ? `<t:${Math.floor(new Date(ticket.created_at).getTime()/1000)}:F>` : "—", inline: true },
         { name: "Closed", value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true },
+        { name: "Timeline", value: timeline.length
+          ? timeline.map(e => `• ${e.action} — ${e.actor_id ? `<@${e.actor_id}>` : "SYSTEM"} — <t:${Math.floor(new Date(e.created_at).getTime()/1000)}:T>${e.details ? ` — ${e.details}` : ""}`).join("\n").slice(0, 1024)
+          : "None", inline: false },
         { name: "Internal Notes", value: internalNotes.length
           ? internalNotes.map(n => `• <@${n.author_id}>: ${n.note}`).join("\n").slice(0, 1024)
           : "None", inline: false },
@@ -1320,5 +1563,8 @@ module.exports = {
   transferModal,
   noteModal,
   transferTicket,
-  addInternalNote
+  addInternalNote,
+  takeOverTicket,
+  ensureTicketControls,
+  canSuperviseTicket
 };

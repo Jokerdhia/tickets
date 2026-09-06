@@ -34,7 +34,9 @@ const {
   transferModal,
   noteModal,
   transferTicket,
-  addInternalNote
+  addInternalNote,
+  takeOverTicket,
+  ensureTicketControls
 } = require("./tickets");
 
 const requiredEnv = [
@@ -73,6 +75,55 @@ async function registerCommands() {
 
 
 
+
+
+async function autoReleaseStaleClaims() {
+  try {
+    const { claimAutoReleaseMinutes } = require("./config");
+    if (!claimAutoReleaseMinutes || claimAutoReleaseMinutes <= 0) return;
+
+    const stale = await db.getStaleClaimedTickets(claimAutoReleaseMinutes);
+    for (const ticket of stale) {
+      const guild = client.guilds.cache.get(ticket.guild_id);
+      const channel = guild?.channels.cache.get(ticket.channel_id);
+      if (!channel?.isTextBased()) continue;
+
+      const previous = ticket.claimed_by;
+      await db.forceReleaseTicket(ticket.id);
+      await db.addTimelineEvent(ticket.id, "AUTO_RELEASED", client.user.id, `Inactive staff: ${previous}`).catch(() => {});
+
+      await channel.send({
+        content: `<@${ticket.owner_id}>`,
+        embeds: [{
+          title: "♻️ Ticket Auto-Released",
+          description: `The ticket was released because <@${previous}> did not take action for **${claimAutoReleaseMinutes} minutes**.`,
+          timestamp: new Date().toISOString()
+        }],
+        allowedMentions: { users: [ticket.owner_id, previous] }
+      }).catch(() => {});
+
+      await ensureTicketControls(channel, { ...ticket, claimed_by: null, claimed_at: null });
+    }
+  } catch (error) {
+    console.error("Erreur auto-release:", error);
+  }
+}
+
+async function recoverOpenTickets() {
+  try {
+    const openTickets = await db.getOpenTickets();
+    for (const ticket of openTickets) {
+      if (ticket.ticket_type !== "robbery") continue;
+      const guild = client.guilds.cache.get(ticket.guild_id);
+      const channel = guild?.channels.cache.get(ticket.channel_id);
+      if (!channel?.isTextBased()) continue;
+      await ensureTicketControls(channel, ticket);
+    }
+    console.log(`✅ Recovery: ${openTickets.length} ticket(s) ouvert(s) vérifié(s).`);
+  } catch (error) {
+    console.error("Erreur recovery tickets:", error);
+  }
+}
 
 async function escalateUnclaimedTickets() {
   try {
@@ -206,9 +257,12 @@ client.once("ready", async () => {
   await expireRobberyTickets();
   await sendRobberyReminders();
   await escalateUnclaimedTickets();
+  await autoReleaseStaleClaims();
+  await recoverOpenTickets();
   setInterval(expireRobberyTickets, 60 * 1000);
   setInterval(sendRobberyReminders, 60 * 1000);
   setInterval(escalateUnclaimedTickets, 60 * 1000);
+  setInterval(autoReleaseStaleClaims, 60 * 1000);
 });
 
 client.on("interactionCreate", async interaction => {
@@ -262,6 +316,10 @@ client.on("interactionCreate", async interaction => {
           });
         }
         return interaction.showModal(memberModal("remove"));
+      }
+
+      if (interaction.customId === "ticket_takeover") {
+        return await takeOverTicket(interaction, ticket);
       }
 
       if (interaction.customId === "ticket_transfer") {

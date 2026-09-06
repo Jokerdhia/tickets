@@ -8,7 +8,9 @@ const {
   panelAdminRoleIds,
   ticketTypes,
   robberyConfig,
-  supervisorRoleIds
+  supervisorRoleIds,
+  warningAutoBlockThreshold,
+  warningAutoBlockMinutes
 } = require("./config");
 
 const db = require("./db");
@@ -51,7 +53,14 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("ticket-stats")
-    .setDescription("إحصائيات التذاكر"),
+    .setDescription("إحصائيات التذاكر")
+    .addSubcommand(sub => sub.setName("overview").setDescription("إحصائيات عامة"))
+    .addSubcommand(sub => sub.setName("staff").setDescription("إحصائيات فريق التذاكر"))
+    .addSubcommand(sub => sub.setName("robbery").setDescription("إحصائيات عمليات السطو")),
+
+  new SlashCommandBuilder()
+    .setName("ticket-timeline")
+    .setDescription("عرض التسلسل الزمني للتذكرة الحالية"),
 
   new SlashCommandBuilder()
     .setName("ticket-blacklist")
@@ -60,6 +69,7 @@ const commands = [
       sub.setName("add").setDescription("إضافة مستخدم للقائمة السوداء")
         .addUserOption(o => o.setName("user").setDescription("المستخدم").setRequired(true))
         .addStringOption(o => o.setName("reason").setDescription("السبب").setRequired(true).setMaxLength(500))
+        .addIntegerOption(o => o.setName("minutes").setDescription("مدة المنع بالدقائق (اتركها فارغة لمنع دائم)").setMinValue(1).setMaxValue(43200))
     )
     .addSubcommand(sub =>
       sub.setName("remove").setDescription("إزالة مستخدم من القائمة السوداء")
@@ -96,7 +106,9 @@ function canPublishPanel(member) {
 function canSupervise(member) {
   return member.permissions.has(PermissionFlagsBits.Administrator) ||
     member.permissions.has(PermissionFlagsBits.ManageGuild) ||
-    supervisorRoleIds.some(id => member.roles.cache.has(id));
+    supervisorRoleIds,
+  warningAutoBlockThreshold,
+  warningAutoBlockMinutes.some(id => member.roles.cache.has(id));
 }
 
 async function handleCommand(interaction) {
@@ -184,10 +196,44 @@ if (interaction.commandName === "ticket-notes") {
 
 if (interaction.commandName === "ticket-stats") {
   if (!canSupervise(interaction.member)) return interaction.reply({ content: "❌ ليست لديك صلاحية.", ephemeral: true });
+
+  const sub = interaction.options.getSubcommand();
+  if (sub === "staff") {
+    const rows = await db.getStaffStats(interaction.guildId);
+    const body = rows.length
+      ? rows.slice(0, 20).map(r => `• <@${r.staff_id}> — Claimed: **${r.claimed}** • Closed: **${r.closed}** • Avg claim: **${r.avg_claim_minutes || "—"} min**`).join("\n")
+      : "No staff data.";
+    return interaction.reply({ embeds: [new EmbedBuilder().setTitle("👮 Staff Ticket Statistics").setDescription(body).setTimestamp()], ephemeral: true });
+  }
+
+  if (sub === "robbery") {
+    const rows = await db.getRobberyStats(interaction.guildId);
+    const body = rows.length
+      ? rows.map(r => `• **${robberyConfig.robberies[r.robbery_type]?.label || r.robbery_type}** — Total: **${r.total}** • Approved: **${r.accepted}** • Rejected: **${r.refused}** • Ready: **${r.ready}**`).join("\n")
+      : "No robbery data.";
+    return interaction.reply({ embeds: [new EmbedBuilder().setTitle("🔫 Robbery Statistics").setDescription(body).setTimestamp()], ephemeral: true });
+  }
+
   const rows = await db.getGuildStats(interaction.guildId);
   const body = rows.length ? rows.map(r => `• **${r.ticket_type} / ${r.status}:** ${r.count}`).join("\n") : "لا توجد بيانات.";
   return interaction.reply({
     embeds: [new EmbedBuilder().setTitle("📊 Ticket Statistics").setDescription(body).setTimestamp()],
+    ephemeral: true
+  });
+}
+
+if (interaction.commandName === "ticket-timeline") {
+  const ticket = await db.getTicketByChannel(interaction.channelId);
+  if (!ticket) return interaction.reply({ content: "❌ هذه القناة ليست تذكرة.", ephemeral: true });
+  if (!canSupervise(interaction.member)) return interaction.reply({ content: "❌ ليست لديك صلاحية.", ephemeral: true });
+
+  const events = await db.getTicketTimeline(ticket.id);
+  const body = events.length
+    ? events.map(e => `• **${e.action}** — ${e.actor_id ? `<@${e.actor_id}>` : "SYSTEM"} — <t:${Math.floor(new Date(e.created_at).getTime()/1000)}:T>${e.details ? `\n> ${e.details}` : ""}`).join("\n").slice(0, 3900)
+    : "No timeline events.";
+
+  return interaction.reply({
+    embeds: [new EmbedBuilder().setTitle(`🕒 Timeline • ${ticket.ticket_code || `TK-${ticket.id}`}`).setDescription(body).setTimestamp()],
     ephemeral: true
   });
 }
@@ -199,8 +245,12 @@ if (interaction.commandName === "ticket-blacklist") {
 
   if (sub === "add") {
     const reason = interaction.options.getString("reason", true);
-    await db.blacklistUser(interaction.guildId, user.id, reason, interaction.user.id);
-    return interaction.reply({ content: `⛔ ${user} تم منعه من فتح التذاكر.\n**Reason:** ${reason}`, ephemeral: true });
+    const minutes = interaction.options.getInteger("minutes");
+    const entry = await db.blacklistUser(interaction.guildId, user.id, reason, interaction.user.id, minutes);
+    const expiry = entry?.expires_at
+      ? `<t:${Math.floor(new Date(entry.expires_at).getTime()/1000)}:R>`
+      : "Permanent";
+    return interaction.reply({ content: `⛔ ${user} تم منعه من فتح التذاكر.\n**Reason:** ${reason}\n**Expires:** ${expiry}`, ephemeral: true });
   }
   if (sub === "remove") {
     await db.unblacklistUser(interaction.guildId, user.id);
@@ -208,7 +258,7 @@ if (interaction.commandName === "ticket-blacklist") {
   }
   const entry = await db.getBlacklistEntry(interaction.guildId, user.id);
   return interaction.reply({
-    content: entry ? `⛔ ${user} ممنوع.\n**Reason:** ${entry.reason}\n**By:** <@${entry.added_by}>` : `✅ ${user} غير موجود في القائمة السوداء.`,
+    content: entry ? `⛔ ${user} ممنوع.\n**Reason:** ${entry.reason}\n**By:** <@${entry.added_by}>\n**Expires:** ${entry.expires_at ? `<t:${Math.floor(new Date(entry.expires_at).getTime()/1000)}:R>` : "Permanent"}` : `✅ ${user} غير موجود في القائمة السوداء.`,
     ephemeral: true
   });
 }
@@ -221,6 +271,22 @@ if (interaction.commandName === "ticket-warning") {
   if (sub === "add") {
     const reason = interaction.options.getString("reason", true);
     await db.addWarning(interaction.guildId, user.id, reason, interaction.user.id);
+    const warnings = await db.getWarnings(interaction.guildId, user.id);
+
+    if (warningAutoBlockThreshold > 0 && warnings.length >= warningAutoBlockThreshold) {
+      await db.blacklistUser(
+        interaction.guildId,
+        user.id,
+        `Automatic block: ${warnings.length} ticket warnings`,
+        interaction.user.id,
+        warningAutoBlockMinutes
+      );
+      return interaction.reply({
+        content: `⚠️ Warning added to ${user}: **${reason}**\n⛔ Automatic ticket block applied for **${warningAutoBlockMinutes} minutes** (${warnings.length} warnings).`,
+        ephemeral: true
+      });
+    }
+
     return interaction.reply({ content: `⚠️ Warning added to ${user}: **${reason}**`, ephemeral: true });
   }
   const warnings = await db.getWarnings(interaction.guildId, user.id);

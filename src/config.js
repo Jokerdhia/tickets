@@ -99,6 +99,9 @@ const robberyCooldownMinutes = Number(process.env.ROBBERY_COOLDOWN_MINUTES || 30
 const robberyOperationCooldownMinutes = Number(process.env.ROBBERY_OPERATION_COOLDOWN_MINUTES || 30);
 const robberyHistoryChannelId = process.env.ROBBERY_HISTORY_CHANNEL_ID || process.env.TICKET_LOG_CHANNEL_ID;
 const unclaimedEscalationMinutes = Number(process.env.TICKET_ESCALATION_MINUTES || 10);
+const claimAutoReleaseMinutes = Number(process.env.TICKET_CLAIM_AUTO_RELEASE_MINUTES || 10);
+const warningAutoBlockThreshold = Number(process.env.TICKET_WARNING_BLOCK_THRESHOLD || 3);
+const warningAutoBlockMinutes = Number(process.env.TICKET_WARNING_BLOCK_MINUTES || 1440);
 
 module.exports = {
   ticketTypes,
@@ -109,5 +112,8 @@ module.exports = {
   robberyOperationCooldownMinutes,
   robberyHistoryChannelId,
   unclaimedEscalationMinutes,
+  claimAutoReleaseMinutes,
+  warningAutoBlockThreshold,
+  warningAutoBlockMinutes,
   robberyConfig
 };

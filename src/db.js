@@ -46,7 +46,8 @@ async function initDb() {
       claimed_at TIMESTAMPTZ,
       closed_at TIMESTAMPTZ,
       ticket_code TEXT,
-      escalated_at TIMESTAMPTZ
+      escalated_at TIMESTAMPTZ,
+      last_staff_action_at TIMESTAMPTZ
     );
   `);
 
@@ -71,6 +72,8 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_2_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_code TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS last_staff_action_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE ticket_blacklist ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`).catch(() => {});
 
 
   await pool.query(`
@@ -139,6 +142,23 @@ await pool.query(`
     ON robbery_operation_cooldowns (guild_id, expires_at);
   `);
 
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS ticket_timeline (
+    id BIGSERIAL PRIMARY KEY,
+    ticket_id BIGINT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    actor_id TEXT,
+    details TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_ticket_timeline_ticket
+  ON ticket_timeline (ticket_id, created_at);
+`);
+
   console.log("✅ Base Neon PostgreSQL prête.");
 }
 
@@ -184,7 +204,7 @@ async function getOpenTicketForUser(guildId, ownerId, ticketType) {
 async function claimTicket(ticketId, userId) {
   const { rows } = await pool.query(
     `UPDATE tickets
-     SET claimed_by = $2, claimed_at = NOW()
+     SET claimed_by = $2, claimed_at = NOW(), last_staff_action_at = NOW()
      WHERE id = $1 AND status = 'open'
      RETURNING *`,
     [ticketId, userId]
@@ -195,7 +215,7 @@ async function claimTicket(ticketId, userId) {
 async function unclaimTicket(ticketId) {
   const { rows } = await pool.query(
     `UPDATE tickets
-     SET claimed_by = NULL, claimed_at = NULL
+     SET claimed_by = NULL, claimed_at = NULL, last_staff_action_at = NOW()
      WHERE id = $1 AND status = 'open'
      RETURNING *`,
     [ticketId]
@@ -320,6 +340,7 @@ async function acceptRobbery(ticketId, acceptedBy, deadline) {
      SET robbery_decision = 'accepted',
          accepted_by = $2,
          accepted_at = NOW(),
+         last_staff_action_at = NOW(),
          robbery_deadline = $3,
          reminder_10_sent = FALSE,
          reminder_5_sent = FALSE,
@@ -341,6 +362,7 @@ async function refuseRobbery(ticketId, refusedBy, reason) {
      SET robbery_decision = 'refused',
          refused_by = $2,
          refused_at = NOW(),
+         last_staff_action_at = NOW(),
          refusal_reason = $3
      WHERE id = $1 AND status = 'open' AND robbery_decision = 'pending'
      RETURNING *`,
@@ -370,7 +392,7 @@ async function markReminderSent(ticketId, kind) {
 
 async function transferTicket(ticketId, userId) {
   const { rows } = await pool.query(
-    `UPDATE tickets SET claimed_by = $2, claimed_at = NOW()
+    `UPDATE tickets SET claimed_by = $2, claimed_at = NOW(), last_staff_action_at = NOW()
      WHERE id = $1 AND status = 'open' RETURNING *`,
     [ticketId, userId]
   );
@@ -394,14 +416,21 @@ async function getTicketNotes(ticketId) {
   return rows;
 }
 
-async function blacklistUser(guildId, userId, reason, addedBy) {
-  await pool.query(
-    `INSERT INTO ticket_blacklist (guild_id, user_id, reason, added_by)
-     VALUES ($1, $2, $3, $4)
+async function blacklistUser(guildId, userId, reason, addedBy, durationMinutes = null) {
+  const { rows } = await pool.query(
+    `INSERT INTO ticket_blacklist (guild_id, user_id, reason, added_by, expires_at)
+     VALUES ($1, $2, $3, $4,
+       CASE WHEN $5::int IS NULL THEN NULL ELSE NOW() + ($5::text || ' minutes')::interval END)
      ON CONFLICT (guild_id, user_id)
-     DO UPDATE SET reason = EXCLUDED.reason, added_by = EXCLUDED.added_by, created_at = NOW()`,
-    [guildId, userId, reason, addedBy]
+     DO UPDATE SET
+       reason = EXCLUDED.reason,
+       added_by = EXCLUDED.added_by,
+       created_at = NOW(),
+       expires_at = EXCLUDED.expires_at
+     RETURNING *`,
+    [guildId, userId, reason, addedBy, durationMinutes]
   );
+  return rows[0];
 }
 
 async function unblacklistUser(guildId, userId) {
@@ -409,8 +438,17 @@ async function unblacklistUser(guildId, userId) {
 }
 
 async function getBlacklistEntry(guildId, userId) {
+  await pool.query(
+    `DELETE FROM ticket_blacklist
+     WHERE guild_id = $1 AND user_id = $2
+       AND expires_at IS NOT NULL AND expires_at <= NOW()`,
+    [guildId, userId]
+  );
   const { rows } = await pool.query(
-    `SELECT * FROM ticket_blacklist WHERE guild_id = $1 AND user_id = $2 LIMIT 1`,
+    `SELECT * FROM ticket_blacklist
+     WHERE guild_id = $1 AND user_id = $2
+       AND (expires_at IS NULL OR expires_at > NOW())
+     LIMIT 1`,
     [guildId, userId]
   );
   return rows[0] || null;
@@ -503,6 +541,7 @@ async function confirmRobberyArrival(ticketId, confirmedBy) {
   const { rows } = await pool.query(
     `UPDATE tickets
      SET robbery_arrived_at = NOW(),
+         last_staff_action_at = NOW(),
          arrival_requested_by = COALESCE(arrival_requested_by, $2)
      WHERE id = $1
        AND status = 'open'
@@ -569,6 +608,98 @@ async function clearExpiredRobberyOperationCooldowns() {
   await pool.query(`DELETE FROM robbery_operation_cooldowns WHERE expires_at <= NOW()`);
 }
 
+
+async function addTimelineEvent(ticketId, action, actorId = null, details = null) {
+  const { rows } = await pool.query(
+    `INSERT INTO ticket_timeline (ticket_id, action, actor_id, details)
+     VALUES ($1, $2, $3, $4)
+     RETURNING *`,
+    [ticketId, action, actorId, details]
+  );
+  return rows[0];
+}
+
+async function getTicketTimeline(ticketId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM ticket_timeline
+     WHERE ticket_id = $1
+     ORDER BY created_at ASC`,
+    [ticketId]
+  );
+  return rows;
+}
+
+async function touchStaffAction(ticketId) {
+  await pool.query(
+    `UPDATE tickets SET last_staff_action_at = NOW()
+     WHERE id = $1 AND status = 'open'`,
+    [ticketId]
+  );
+}
+
+async function getStaleClaimedTickets(minutes) {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets
+     WHERE status = 'open'
+       AND claimed_by IS NOT NULL
+       AND COALESCE(robbery_decision, 'pending') = 'pending'
+       AND COALESCE(last_staff_action_at, claimed_at) <= NOW() - ($1::text || ' minutes')::interval`,
+    [String(minutes)]
+  );
+  return rows;
+}
+
+async function forceReleaseTicket(ticketId) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET claimed_by = NULL,
+         claimed_at = NULL,
+         last_staff_action_at = NOW()
+     WHERE id = $1 AND status = 'open'
+     RETURNING *`,
+    [ticketId]
+  );
+  return rows[0] || null;
+}
+
+async function getOpenTickets() {
+  const { rows } = await pool.query(
+    `SELECT * FROM tickets WHERE status = 'open' ORDER BY created_at ASC`
+  );
+  return rows;
+}
+
+async function getStaffStats(guildId) {
+  const { rows } = await pool.query(
+    `SELECT claimed_by AS staff_id,
+            COUNT(*)::int AS claimed,
+            COUNT(*) FILTER (WHERE status = 'closed')::int AS closed,
+            ROUND(AVG(EXTRACT(EPOCH FROM (claimed_at - created_at)) / 60.0)::numeric, 1) AS avg_claim_minutes
+     FROM tickets
+     WHERE guild_id = $1 AND claimed_by IS NOT NULL
+     GROUP BY claimed_by
+     ORDER BY claimed DESC`,
+    [guildId]
+  );
+  return rows;
+}
+
+async function getRobberyStats(guildId) {
+  const { rows } = await pool.query(
+    `SELECT robbery_type,
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE robbery_decision = 'accepted')::int AS accepted,
+            COUNT(*) FILTER (WHERE robbery_decision = 'refused')::int AS refused,
+            COUNT(*) FILTER (WHERE robbery_arrived_at IS NOT NULL)::int AS ready
+     FROM tickets
+     WHERE guild_id = $1 AND ticket_type = 'robbery'
+     GROUP BY robbery_type
+     ORDER BY total DESC`,
+    [guildId]
+  );
+  return rows;
+}
+
 module.exports = {
   pool,
   initDb,
@@ -608,5 +739,13 @@ module.exports = {
   rejectRobberyArrival,
   setRobberyOperationCooldown,
   getRobberyOperationCooldown,
-  clearExpiredRobberyOperationCooldowns
+  clearExpiredRobberyOperationCooldowns,
+  addTimelineEvent,
+  getTicketTimeline,
+  touchStaffAction,
+  getStaleClaimedTickets,
+  forceReleaseTicket,
+  getOpenTickets,
+  getStaffStats,
+  getRobberyStats
 };

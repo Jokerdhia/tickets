@@ -432,3 +432,55 @@ Button labels remain English.
 - Cooldowns are stored in Neon and survive Render restarts.
 - `ROBBERY_OPERATION_COOLDOWN_MINUTES=30` controls the duration.
 - If `ROBBERY_HISTORY_CHANNEL_ID` is missing, the normal ticket log room is used.
+
+# V7.7 — Stage-Based Robbery Workflow
+
+The robbery ticket now shows only the buttons relevant to the current stage.
+
+Stages:
+1. **Waiting for Staff** → Claim / Close
+2. **Police Review** → Release / Approve / Reject / Transfer / Add Note
+3. **Travel to Robbery** → Request Arrival / Transfer / Add Note / Close
+4. **Arrival Verification** → Confirm Arrival / Reject Arrival / Transfer / Add Note / Close
+5. **Operation Finished** → Close only
+
+Every stage change removes the old buttons and sends a new professional embed with the buttons for that step.
+
+
+# V8 Pro — Reliability & Command Workflow
+
+V8 focuses on reliability, staff control and auditing without a web dashboard.
+
+## New
+- Full ticket timeline stored in Neon:
+  - Created
+  - Claimed / Released
+  - Approved / Rejected
+  - Arrival Requested / Confirmed / Rejected
+  - Transferred
+  - Take Over
+  - Internal Note
+  - Auto Release
+  - Close
+- `/ticket-timeline`
+- Professional robbery channel status names:
+  - `wait-*`
+  - `review-*`
+  - `travel-*`
+  - `verify-*`
+  - `done-*`
+- **Take Over** button for Supervisor / High Grade.
+- Automatic release of inactive claimed tickets.
+- Restart recovery: open robbery tickets recover their active control buttons after Render restarts.
+- Temporary blacklist support with optional duration.
+- Automatic warning threshold block.
+- Advanced `/ticket-stats overview|staff|robbery`.
+- Existing V7.7 step-by-step embeds/buttons remain active.
+- Existing 30-minute robbery arrival deadline and per-operation cooldown remain active.
+- Existing full HTML transcripts and detailed closing logs remain active.
+
+## Optional environment variables
+- `TICKET_CLAIM_AUTO_RELEASE_MINUTES=10`
+- `TICKET_WARNING_BLOCK_THRESHOLD=3`
+- `TICKET_WARNING_BLOCK_MINUTES=1440`
+- Existing `TICKET_SUPERVISOR_ROLE_IDS` controls Take Over and supervisor commands.
