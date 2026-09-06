@@ -21,6 +21,10 @@ const {
 const db = require("./db");
 const { buildTranscript } = require("./transcript");
 
+function requesterMention(ticket) {
+  return ticket?.owner_id ? `<@${ticket.owner_id}>` : "";
+}
+
 function safeName(value) {
   return value
     .toLowerCase()
@@ -32,38 +36,15 @@ function safeName(value) {
     .slice(0, 60) || "user";
 }
 
-function ticketControls(claimedBy = null, ticketType = null, arrived = false, decision = "pending") {
+function ticketControls(claimedBy = null, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false) {
   if (ticketType !== "robbery") {
     return [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("ticket_claim")
-          .setLabel(claimedBy ? "Claimed" : "Claim")
-          .setEmoji("🙋")
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(Boolean(claimedBy)),
-        new ButtonBuilder()
-          .setCustomId("ticket_unclaim")
-          .setLabel("Release")
-          .setEmoji("↩️")
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(!claimedBy),
-        new ButtonBuilder()
-          .setCustomId("ticket_transfer")
-          .setLabel("Transfer")
-          .setEmoji("🔁")
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(!claimedBy),
-        new ButtonBuilder()
-          .setCustomId("ticket_note")
-          .setLabel("Add Note")
-          .setEmoji("📝")
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId("ticket_close")
-          .setLabel("Close")
-          .setEmoji("🔒")
-          .setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId("ticket_claim").setLabel(claimedBy ? "Claimed" : "Claim").setEmoji("🙋").setStyle(ButtonStyle.Success).setDisabled(Boolean(claimedBy)),
+        new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary).setDisabled(!claimedBy),
+        new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Primary).setDisabled(!claimedBy),
+        new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Danger)
       )
     ];
   }
@@ -72,61 +53,37 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
   const refused = decision === "refused";
 
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("ticket_claim")
-      .setLabel(claimedBy ? "Claimed" : "Claim")
-      .setEmoji("🙋")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(Boolean(claimedBy) || refused),
-    new ButtonBuilder()
-      .setCustomId("ticket_unclaim")
-      .setLabel("Release")
-      .setEmoji("↩️")
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!claimedBy || accepted || refused)
+    new ButtonBuilder().setCustomId("ticket_claim").setLabel(claimedBy ? "Claimed" : "Claim").setEmoji("🙋").setStyle(ButtonStyle.Success).setDisabled(Boolean(claimedBy) || refused),
+    new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary).setDisabled(!claimedBy || accepted || refused),
+    new ButtonBuilder().setCustomId("robbery_accept").setLabel("Approve").setEmoji("✅").setStyle(ButtonStyle.Success).setDisabled(!claimedBy || accepted || refused),
+    new ButtonBuilder().setCustomId("robbery_refuse").setLabel("Reject").setEmoji("❌").setStyle(ButtonStyle.Danger).setDisabled(!claimedBy || accepted || refused),
+    new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setEmoji("🔒").setStyle(ButtonStyle.Secondary)
   );
 
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId("robbery_accept")
-      .setLabel("Approve")
-      .setEmoji("✅")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!claimedBy || accepted || refused),
-    new ButtonBuilder()
-      .setCustomId("robbery_refuse")
-      .setLabel("Reject")
-      .setEmoji("❌")
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(!claimedBy || accepted || refused),
-    new ButtonBuilder()
-      .setCustomId("robbery_arrived")
-      .setLabel(arrived ? "Arrival Confirmed" : "All On Site")
+      .setCustomId("robbery_request_arrival")
+      .setLabel(arrived ? "Arrival Confirmed" : (arrivalRequested ? "Arrival Requested" : "Request Arrival"))
       .setEmoji("📍")
       .setStyle(ButtonStyle.Primary)
-      .setDisabled(!accepted || arrived),
+      .setDisabled(!accepted || arrived || arrivalRequested),
     new ButtonBuilder()
-      .setCustomId("ticket_close")
-      .setLabel("Close")
-      .setEmoji("🔒")
-      .setStyle(ButtonStyle.Secondary)
+      .setCustomId("robbery_confirm_arrival")
+      .setLabel("Confirm Arrival")
+      .setEmoji("✅")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(!accepted || arrived || !arrivalRequested),
+    new ButtonBuilder()
+      .setCustomId("robbery_reject_arrival")
+      .setLabel("Reject Arrival")
+      .setEmoji("❌")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!accepted || arrived || !arrivalRequested),
+    new ButtonBuilder().setCustomId("ticket_transfer").setLabel("Transfer").setEmoji("🔁").setStyle(ButtonStyle.Secondary).setDisabled(!claimedBy || refused),
+    new ButtonBuilder().setCustomId("ticket_note").setLabel("Add Note").setEmoji("📝").setStyle(ButtonStyle.Secondary)
   );
 
-  const row3 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("ticket_transfer")
-      .setLabel("Transfer")
-      .setEmoji("🔁")
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(!claimedBy || refused),
-    new ButtonBuilder()
-      .setCustomId("ticket_note")
-      .setLabel("Add Note")
-      .setEmoji("📝")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  return [row1, row2, row3];
+  return [row1, row2];
 }
 
 function memberHasAnyRole(member, roleIds) {
@@ -149,7 +106,7 @@ function canCloseTicket(member, ticket) {
   return member.id === ticket.owner_id || canManageTicket(member, ticket);
 }
 
-async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending") {
+async function updateControlMessage(channel, claimedBy, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false) {
   const messages = await channel.messages.fetch({ limit: 30 });
   const controlMessage = messages.find(m =>
     m.author.id === channel.client.user.id &&
@@ -159,7 +116,7 @@ async function updateControlMessage(channel, claimedBy, ticketType = null, arriv
   );
 
   if (controlMessage) {
-    await controlMessage.edit({ components: ticketControls(claimedBy, ticketType, arrived, decision) }).catch(() => {});
+    await controlMessage.edit({ components: ticketControls(claimedBy, ticketType, arrived, decision, arrivalRequested) }).catch(() => {});
   }
 }
 
@@ -750,7 +707,11 @@ async function claimTicket(interaction, ticket) {
     .setFooter({ text: "HMPD • Ticket Management" })
     .setTimestamp();
 
-  return interaction.reply({ embeds: [embed] });
+  return interaction.reply({
+    content: requesterMention(ticket),
+    embeds: [embed],
+    allowedMentions: { users: [ticket.owner_id] }
+  });
 }
 
 async function unclaimTicket(interaction, ticket) {
@@ -837,7 +798,7 @@ async function acceptRobbery(interaction, ticket) {
     return interaction.reply({ content: "❌ تم اتخاذ قرار بشأن هذه العملية مسبقاً.", ephemeral: true });
   }
 
-  const deadline = new Date(Date.now() + 20 * 60 * 1000);
+  const deadline = new Date(Date.now() + 30 * 60 * 1000);
   const updated = await db.acceptRobbery(ticket.id, interaction.user.id, deadline);
   if (!updated) {
     return interaction.reply({ content: "❌ تعذر قبول العملية أو تم اتخاذ قرار مسبقاً.", ephemeral: true });
@@ -851,18 +812,22 @@ async function acceptRobbery(interaction, ticket) {
     .setDescription([
       `تم قبول العملية بواسطة ${interaction.user}.`,
       "",
-      "⏱️ **يجب على جميع أفراد العصابة / المافيا التواجد في موقع العملية خلال 20 دقيقة كحد أقصى.**",
+      "⏱️ **يجب على جميع أفراد العصابة / المافيا التواجد في موقع العملية خلال 30 دقيقة كحد أقصى.**",
       `المهلة المتبقية: <t:${unix}:R> — الموعد النهائي: <t:${unix}:t>.`,
       "",
-      "📍 عند وصول الجميع، يضغط المسؤول على زر **الجميع في الموقع**.",
-      "🔔 سيقوم النظام بإرسال تنبيه عند بقاء 10 دقائق و5 دقائق.",
+      "📍 عند وصول الجميع، يضغط صاحب الطلب على **Request Arrival**، ثم تقوم الشرطة بتأكيد الوصول عبر **Confirm Arrival**.",
+      "🔔 سيقوم النظام بإرسال تنبيهات عند بقاء 10 دقائق و5 دقائق ودقيقتين.",
       "",
       "❌ إذا انتهت المهلة دون تأكيد الوصول، سيتم إلغاء العملية وإغلاق التذكرة تلقائياً."
     ].join("\n"))
     .setFooter({ text: "HMPD • Robbery Authorization" })
     .setTimestamp();
 
-  return interaction.reply({ embeds: [embed] });
+  return interaction.reply({
+    content: requesterMention(ticket),
+    embeds: [embed],
+    allowedMentions: { users: [ticket.owner_id] }
+  });
 }
 
 async function refuseRobbery(interaction, ticket, reason) {
@@ -898,7 +863,11 @@ async function refuseRobbery(interaction, ticket, reason) {
     .setFooter({ text: "HMPD • Robbery Decision" })
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({
+    content: requesterMention(ticket),
+    embeds: [embed],
+    allowedMentions: { users: [ticket.owner_id] }
+  });
 
   // Log the refusal before closing.
   const logChannel = logChannelId ? interaction.guild.channels.cache.get(logChannelId) : null;
@@ -922,54 +891,152 @@ async function refuseRobbery(interaction, ticket, reason) {
   }, 5000);
 }
 
-async function confirmRobberyArrived(interaction, ticket) {
+async function requestRobberyArrival(interaction, ticket) {
   if (ticket.ticket_type !== "robbery") {
-    return interaction.reply({ content: "❌ Ce ticket n'est pas un braquage.", ephemeral: true });
+    return interaction.reply({ content: "❌ This ticket is not a robbery request.", ephemeral: true });
   }
-
-  if (!canManageTicket(interaction.member, ticket)) {
-    return interaction.reply({
-      content: "❌ Seul le staff autorisé peut confirmer l'arrivée.",
-      ephemeral: true
-    });
+  if (interaction.user.id !== ticket.owner_id) {
+    return interaction.reply({ content: "❌ Only the ticket requester can use **Request Arrival**.", ephemeral: true });
   }
-
   if ((ticket.robbery_decision || "pending") !== "accepted") {
-    return interaction.reply({
-      content: "❌ يجب قبول العملية أولاً بواسطة زر **قبول العملية**.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "❌ The robbery must be approved first.", ephemeral: true });
   }
-
   if (ticket.robbery_arrived_at) {
-    return interaction.reply({
-      content: "✅ L'arrivée a déjà été confirmée.",
-      ephemeral: true
-    });
+    return interaction.reply({ content: "✅ Arrival is already confirmed.", ephemeral: true });
+  }
+  if (ticket.arrival_requested_at) {
+    return interaction.reply({ content: "⏳ An arrival confirmation is already waiting for police review.", ephemeral: true });
+  }
+  if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() <= Date.now()) {
+    return interaction.reply({ content: "❌ The 30-minute arrival deadline has expired.", ephemeral: true });
   }
 
-  if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() < Date.now()) {
-    return interaction.reply({
-      content: "❌ Le délai de 20 minutes est déjà dépassé.",
-      ephemeral: true
-    });
+  const updated = await db.requestRobberyArrival(ticket.id, interaction.user.id);
+  if (!updated) {
+    return interaction.reply({ content: "❌ Arrival request could not be submitted.", ephemeral: true });
   }
 
-  const updated = await db.markRobberyArrived(ticket.id);
-  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted");
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", true);
+
+  const deadline = new Date(ticket.robbery_deadline).getTime();
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
+  const remainingSeconds = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
 
   const embed = new EmbedBuilder()
-    .setTitle("✅ Arrival Confirmed")
+    .setTitle("📍 Arrival Confirmation Requested")
     .setDescription([
-      `${interaction.user} أكد أن جميع الأعضاء متواجدون في موقع العملية.`,
+      `${interaction.user} يعلن أن جميع المشاركين وصلوا إلى موقع العملية.`,
       "",
-      "تم احترام مهلة الـ 20 دقيقة. يمكن متابعة العملية وفقاً للتعليمات."
+      `⏱️ الوقت المستخدم: **${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s**`,
+      `⌛ الوقت المتبقي: **${Math.floor(remainingSeconds / 60)}m ${remainingSeconds % 60}s**`,
+      "",
+      "🚓 يجب على الشرطة التحقق من وجود جميع المشاركين في الموقع.",
+      "استخدم **Confirm Arrival** إذا كان الجميع موجوداً، أو **Reject Arrival** إذا لم يكتمل الوصول.",
+      "",
+      "⚠️ رفض الطلب لا يوقف المؤقت؛ يمكن لصاحب الطلب إرسال طلب وصول جديد قبل انتهاء 30 دقيقة."
     ].join("\n"))
+    .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
     .setTimestamp();
 
-  return interaction.reply({ embeds: [embed] });
+  const staffMentions = robberyConfig.staffRoleIds.map(id => `<@&${id}>`).join(" ");
+  return interaction.reply({
+    content: `${staffMentions} <@${ticket.owner_id}>`.trim(),
+    embeds: [embed],
+    allowedMentions: { roles: robberyConfig.staffRoleIds, users: [ticket.owner_id] }
+  });
 }
 
+async function confirmRobberyArrival(interaction, ticket) {
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({ content: "❌ Only authorized HMPD staff can confirm arrival.", ephemeral: true });
+  }
+  if ((ticket.robbery_decision || "pending") !== "accepted") {
+    return interaction.reply({ content: "❌ The robbery is not approved.", ephemeral: true });
+  }
+  if (!ticket.arrival_requested_at) {
+    return interaction.reply({ content: "❌ The requester has not submitted **Request Arrival** yet.", ephemeral: true });
+  }
+  if (ticket.robbery_arrived_at) {
+    return interaction.reply({ content: "✅ Arrival is already confirmed.", ephemeral: true });
+  }
+  if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() <= Date.now()) {
+    return interaction.reply({ content: "❌ The 30-minute arrival deadline has expired.", ephemeral: true });
+  }
+
+  const updated = await db.confirmRobberyArrival(ticket.id, interaction.user.id);
+  if (!updated) {
+    return interaction.reply({ content: "❌ Arrival could not be confirmed.", ephemeral: true });
+  }
+
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", true, "accepted", true);
+
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(ticket.accepted_at).getTime()) / 1000));
+  const robbery = robberyConfig.robberies[ticket.robbery_type];
+
+  const embed = new EmbedBuilder()
+    .setTitle("✅ Robbery Ready")
+    .addFields(
+      { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
+      { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
+      { name: "Participants", value: String(ticket.criminal_count || "—"), inline: true },
+      { name: "Approved By", value: ticket.accepted_by ? `<@${ticket.accepted_by}>` : "—", inline: true },
+      { name: "Arrival Confirmed By", value: `${interaction.user}`, inline: true },
+      { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
+      { name: "Status", value: "🟢 READY", inline: true }
+    )
+    .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+    .setTimestamp();
+
+  return interaction.reply({
+    content: `<@${ticket.owner_id}>`,
+    embeds: [embed],
+    allowedMentions: { users: [ticket.owner_id] }
+  });
+}
+
+async function rejectRobberyArrival(interaction, ticket) {
+  if (!canManageTicket(interaction.member, ticket)) {
+    return interaction.reply({ content: "❌ Only authorized HMPD staff can reject arrival.", ephemeral: true });
+  }
+  if ((ticket.robbery_decision || "pending") !== "accepted") {
+    return interaction.reply({ content: "❌ The robbery is not approved.", ephemeral: true });
+  }
+  if (!ticket.arrival_requested_at) {
+    return interaction.reply({ content: "❌ There is no pending arrival request.", ephemeral: true });
+  }
+  if (ticket.robbery_arrived_at) {
+    return interaction.reply({ content: "✅ Arrival is already confirmed.", ephemeral: true });
+  }
+
+  const updated = await db.rejectRobberyArrival(ticket.id, interaction.user.id);
+  if (!updated) {
+    return interaction.reply({ content: "❌ Arrival request could not be rejected.", ephemeral: true });
+  }
+
+  await updateControlMessage(interaction.channel, ticket.claimed_by, "robbery", false, "accepted", false);
+
+  const deadlineUnix = ticket.robbery_deadline
+    ? Math.floor(new Date(ticket.robbery_deadline).getTime() / 1000)
+    : null;
+
+  const embed = new EmbedBuilder()
+    .setTitle("❌ Arrival Request Rejected")
+    .setDescription([
+      `تم رفض تأكيد الوصول بواسطة ${interaction.user}.`,
+      "",
+      "المؤقت **يستمر** ولا يتم تمديده.",
+      "يمكن لصاحب الطلب الضغط على **Request Arrival** مرة أخرى عندما يكون جميع المشاركين في الموقع.",
+      deadlineUnix ? `⏱️ الموعد النهائي: <t:${deadlineUnix}:R>.` : ""
+    ].filter(Boolean).join("\n"))
+    .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
+    .setTimestamp();
+
+  return interaction.reply({
+    content: `<@${ticket.owner_id}>`,
+    embeds: [embed],
+    allowedMentions: { users: [ticket.owner_id] }
+  });
+}
 
 function transferModal() {
   const modal = new ModalBuilder()
@@ -1026,6 +1093,8 @@ async function transferTicket(interaction, ticket, userId) {
   );
 
   return interaction.reply({
+    content: requesterMention(ticket),
+    allowedMentions: { users: [ticket.owner_id] },
     embeds: [new EmbedBuilder()
       .setTitle("🔁 Ticket Transferred")
       .setDescription(`${interaction.user} نقل التذكرة إلى ${member}.`)
@@ -1215,7 +1284,9 @@ module.exports = {
   showRobberyMenu,
   createRobberyTicket,
   robberyRequestModal,
-  confirmRobberyArrived,
+  requestRobberyArrival,
+  confirmRobberyArrival,
+  rejectRobberyArrival,
   acceptRobbery,
   refuseRobbery,
   robberyRefuseModal,

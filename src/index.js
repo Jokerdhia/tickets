@@ -25,7 +25,9 @@ const {
   showRobberyMenu,
   createRobberyTicket,
   robberyRequestModal,
-  confirmRobberyArrived,
+  requestRobberyArrival,
+  confirmRobberyArrival,
+  rejectRobberyArrival,
   acceptRobbery,
   refuseRobbery,
   robberyRefuseModal,
@@ -89,13 +91,13 @@ async function escalateUnclaimedTickets() {
 
       const mentions = roleIds.map(id => `<@&${id}>`).join(" ");
       await channel.send({
-        content: mentions || undefined,
+        content: `${mentions} <@${ticket.owner_id}>`.trim(),
         embeds: [{
           title: "🚨 Ticket Escalation",
           description: `هذه التذكرة لم يتم استلامها منذ أكثر من **${unclaimedEscalationMinutes} دقيقة**.`,
           timestamp: new Date().toISOString()
         }],
-        allowedMentions: { roles: roleIds }
+        allowedMentions: { roles: roleIds, users: [ticket.owner_id] }
       }).catch(() => {});
       await db.markEscalated(ticket.id);
     }
@@ -111,33 +113,48 @@ async function sendRobberyReminders() {
 
     for (const ticket of tickets) {
       const deadline = new Date(ticket.robbery_deadline).getTime();
-      const remainingMs = deadline - now;
-      const remainingMin = remainingMs / 60000;
-
+      const remainingMin = (deadline - now) / 60000;
       const guild = client.guilds.cache.get(ticket.guild_id);
       const channel = guild?.channels.cache.get(ticket.channel_id);
       if (!channel?.isTextBased()) continue;
 
       if (!ticket.reminder_10_sent && remainingMin <= 10 && remainingMin > 5) {
         await channel.send({
+          content: `<@${ticket.owner_id}>`,
+          allowedMentions: { users: [ticket.owner_id] },
           embeds: [{
-            title: "⏰ تنبيه — 10 دقائق متبقية",
-            description: "تبقى حوالي **10 دقائق** لتأكيد وصول جميع أفراد العصابة / المافيا إلى موقع العملية.",
+            title: "⏰ 20 Minutes Used — 10 Minutes Left",
+            description: "تبقى **10 دقائق** فقط لإرسال **Request Arrival** والحصول على تأكيد الشرطة.",
             timestamp: new Date().toISOString()
           }]
         }).catch(() => {});
         await db.markReminderSent(ticket.id, 10);
       }
 
-      if (!ticket.reminder_5_sent && remainingMin <= 5 && remainingMin > 0) {
+      if (!ticket.reminder_5_sent && remainingMin <= 5 && remainingMin > 2) {
         await channel.send({
+          content: `<@${ticket.owner_id}>`,
+          allowedMentions: { users: [ticket.owner_id] },
           embeds: [{
-            title: "🚨 تنبيه أخير — 5 دقائق متبقية",
-            description: "تبقى حوالي **5 دقائق فقط**. إذا لم يتم تأكيد الوصول قبل انتهاء المهلة، سيتم إلغاء العملية تلقائياً.",
+            title: "🚨 25 Minutes Used — 5 Minutes Left",
+            description: "تبقى **5 دقائق** فقط. يجب أن يكون جميع المشاركين في الموقع وأن تؤكد الشرطة الوصول قبل انتهاء المهلة.",
             timestamp: new Date().toISOString()
           }]
         }).catch(() => {});
         await db.markReminderSent(ticket.id, 5);
+      }
+
+      if (!ticket.reminder_2_sent && remainingMin <= 2 && remainingMin > 0) {
+        await channel.send({
+          content: `<@${ticket.owner_id}>`,
+          allowedMentions: { users: [ticket.owner_id] },
+          embeds: [{
+            title: "🚨 FINAL WARNING — 2 Minutes Left",
+            description: "تبقت **دقيقتان فقط**. بدون **Confirm Arrival** من الشرطة قبل انتهاء 30 دقيقة سيتم إلغاء العملية تلقائياً.",
+            timestamp: new Date().toISOString()
+          }]
+        }).catch(() => {});
+        await db.markReminderSent(ticket.id, 2);
       }
     }
   } catch (error) {
@@ -155,25 +172,27 @@ async function expireRobberyTickets() {
 
       const channel = guild.channels.cache.get(ticket.channel_id);
       if (!channel?.isTextBased()) {
-        await db.closeTicket(ticket.id, client.user.id, "Délai de 20 minutes dépassé.");
+        await db.closeTicket(ticket.id, client.user.id, "Délai de 30 minutes dépassé.");
         continue;
       }
 
       await channel.send({
+        content: `<@${ticket.owner_id}>`,
+        allowedMentions: { users: [ticket.owner_id] },
         embeds: [{
           title: "❌ Braquage annulé",
           description:
-            "Le délai de **20 minutes** après l'acceptation par la police est dépassé.\n\n" +
-            "Tous les membres n'ont pas été confirmés au point du braquage à temps.\n" +
+            "Le délai de **30 minutes** après l'acceptation par la police est dépassé.\n\n" +
+            "L'arrivée de tous les participants n'a pas été confirmée par la police à temps.\n" +
             "**Le braquage est annulé et ce ticket va être fermé automatiquement.**",
           timestamp: new Date().toISOString()
         }]
       }).catch(() => {});
 
-      await db.closeTicket(ticket.id, client.user.id, "Délai de 20 minutes dépassé — braquage annulé.");
+      await db.closeTicket(ticket.id, client.user.id, "Délai de 30 minutes dépassé — braquage annulé.");
 
       setTimeout(() => {
-        channel.delete("Braquage annulé : délai de 20 minutes dépassé").catch(() => {});
+        channel.delete("Braquage annulé : délai de 30 minutes dépassé").catch(() => {});
       }, 5000);
     }
   } catch (error) {
@@ -273,8 +292,16 @@ client.on("interactionCreate", async interaction => {
         return interaction.showModal(robberyRefuseModal());
       }
 
-      if (interaction.customId === "robbery_arrived") {
-        return await confirmRobberyArrived(interaction, ticket);
+      if (interaction.customId === "robbery_request_arrival") {
+        return await requestRobberyArrival(interaction, ticket);
+      }
+
+      if (interaction.customId === "robbery_confirm_arrival") {
+        return await confirmRobberyArrival(interaction, ticket);
+      }
+
+      if (interaction.customId === "robbery_reject_arrival") {
+        return await rejectRobberyArrival(interaction, ticket);
       }
 
       if (interaction.customId === "ticket_close") {

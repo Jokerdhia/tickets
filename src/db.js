@@ -22,6 +22,10 @@ async function initDb() {
       robbery_type TEXT,
       robbery_deadline TIMESTAMPTZ,
       robbery_arrived_at TIMESTAMPTZ,
+      arrival_requested_at TIMESTAMPTZ,
+      arrival_requested_by TEXT,
+      arrival_rejected_at TIMESTAMPTZ,
+      arrival_rejected_by TEXT,
       group_name TEXT,
       criminal_count INTEGER,
       guns TEXT,
@@ -33,6 +37,7 @@ async function initDb() {
       refusal_reason TEXT,
       reminder_10_sent BOOLEAN NOT NULL DEFAULT FALSE,
       reminder_5_sent BOOLEAN NOT NULL DEFAULT FALSE,
+      reminder_2_sent BOOLEAN NOT NULL DEFAULT FALSE,
       status TEXT NOT NULL DEFAULT 'open',
       claimed_by TEXT,
       close_reason TEXT,
@@ -48,6 +53,10 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_type TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_deadline TIMESTAMPTZ;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS robbery_arrived_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_requested_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_requested_by TEXT;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_rejected_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS arrival_rejected_by TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS group_name TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS criminal_count INTEGER;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS guns TEXT;`);
@@ -59,6 +68,7 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS refusal_reason TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_10_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_5_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reminder_2_sent BOOLEAN NOT NULL DEFAULT FALSE;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_code TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;`);
 
@@ -294,7 +304,12 @@ async function acceptRobbery(ticketId, acceptedBy, deadline) {
          accepted_at = NOW(),
          robbery_deadline = $3,
          reminder_10_sent = FALSE,
-         reminder_5_sent = FALSE
+         reminder_5_sent = FALSE,
+         reminder_2_sent = FALSE,
+         arrival_requested_at = NULL,
+         arrival_requested_by = NULL,
+         arrival_rejected_at = NULL,
+         arrival_rejected_by = NULL
      WHERE id = $1 AND status = 'open' AND robbery_decision = 'pending'
      RETURNING *`,
     [ticketId, acceptedBy, deadline]
@@ -330,7 +345,7 @@ async function getRobberiesNeedingReminders() {
 }
 
 async function markReminderSent(ticketId, kind) {
-  const column = kind === 10 ? "reminder_10_sent" : "reminder_5_sent";
+  const column = kind === 10 ? "reminder_10_sent" : (kind === 5 ? "reminder_5_sent" : "reminder_2_sent");
   await pool.query(`UPDATE tickets SET ${column} = TRUE WHERE id = $1`, [ticketId]);
 }
 
@@ -448,6 +463,59 @@ async function markEscalated(ticketId) {
   await pool.query(`UPDATE tickets SET escalated_at = NOW() WHERE id = $1`, [ticketId]);
 }
 
+
+async function requestRobberyArrival(ticketId, requestedBy) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET arrival_requested_at = NOW(),
+         arrival_requested_by = $2
+     WHERE id = $1
+       AND status = 'open'
+       AND robbery_decision = 'accepted'
+       AND robbery_arrived_at IS NULL
+       AND robbery_deadline > NOW()
+       AND arrival_requested_at IS NULL
+     RETURNING *`,
+    [ticketId, requestedBy]
+  );
+  return rows[0] || null;
+}
+
+async function confirmRobberyArrival(ticketId, confirmedBy) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET robbery_arrived_at = NOW(),
+         arrival_requested_by = COALESCE(arrival_requested_by, $2)
+     WHERE id = $1
+       AND status = 'open'
+       AND robbery_decision = 'accepted'
+       AND robbery_arrived_at IS NULL
+       AND robbery_deadline > NOW()
+       AND arrival_requested_at IS NOT NULL
+     RETURNING *`,
+    [ticketId, confirmedBy]
+  );
+  return rows[0] || null;
+}
+
+async function rejectRobberyArrival(ticketId, rejectedBy) {
+  const { rows } = await pool.query(
+    `UPDATE tickets
+     SET arrival_rejected_at = NOW(),
+         arrival_rejected_by = $2,
+         arrival_requested_at = NULL,
+         arrival_requested_by = NULL
+     WHERE id = $1
+       AND status = 'open'
+       AND robbery_decision = 'accepted'
+       AND robbery_arrived_at IS NULL
+       AND arrival_requested_at IS NOT NULL
+     RETURNING *`,
+    [ticketId, rejectedBy]
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   pool,
   initDb,
@@ -481,5 +549,8 @@ module.exports = {
   getGuildStats,
   getRecentClosedRobberyForGroup,
   getTicketsForEscalation,
-  markEscalated
+  markEscalated,
+  requestRobberyArrival,
+  confirmRobberyArrival,
+  rejectRobberyArrival
 };

@@ -386,3 +386,39 @@ No web dashboard is included.
 
 - Cargo: maximum **1 active request** at a time.
 - Cargo max participants remains **12**.
+
+# V7.3 — Requester Mentions
+
+The requester is automatically tagged on:
+- Claim
+- Approval
+- Rejection
+- Transfer
+- Arrival confirmation
+- 10-minute reminder
+- 5-minute reminder
+- Automatic cancellation / expiration
+- Unclaimed ticket escalation
+
+# V7.4 — Requester All On Site
+
+- The requester who opened the robbery ticket can now use **All On Site**.
+- Authorized HMPD staff can still use the button.
+- Other users remain blocked.
+- The confirmation records/displays who confirmed the arrival.
+
+# V7.5 — Police-Verified Arrival
+
+New robbery arrival workflow:
+
+1. HMPD uses **Approve**.
+2. A strict **30-minute** timer starts.
+3. The requester uses **Request Arrival** when all criminals are on site.
+4. HMPD uses **Confirm Arrival** or **Reject Arrival**.
+5. Rejecting arrival does **not** reset or extend the timer.
+6. The requester may submit **Request Arrival** again before the deadline.
+7. Automatic reminders are sent after 20 minutes, 25 minutes and 28 minutes.
+8. At 30 minutes without police confirmation, the robbery is automatically cancelled.
+9. **Robbery Ready** displays operation, gang, participants, approval officer, confirmation officer and arrival time.
+
+Button labels remain English.

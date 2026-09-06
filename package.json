@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "7.2.0",
-  "description": "HMPD Ticket Bot V7.2 - Cargo limited to one active request",
+  "version": "7.5.0",
+  "description": "HMPD Ticket Bot V7.5 - 30-minute police-verified robbery arrival workflow",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
