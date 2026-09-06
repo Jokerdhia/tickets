@@ -97,7 +97,8 @@ const robberyConfig = {
 const supervisorRoleIds = csv(process.env.TICKET_SUPERVISOR_ROLE_IDS);
 const robberyCooldownMinutes = Number(process.env.ROBBERY_COOLDOWN_MINUTES || 30);
 const robberyOperationCooldownMinutes = Number(process.env.ROBBERY_OPERATION_COOLDOWN_MINUTES || 30);
-const robberyHistoryChannelId = process.env.ROBBERY_HISTORY_CHANNEL_ID || process.env.TICKET_LOG_CHANNEL_ID;
+const robberyCooldownChannelId = process.env.ROBBERY_COOLDOWN_CHANNEL_ID || process.env.ROBBERY_HISTORY_CHANNEL_ID || process.env.TICKET_LOG_CHANNEL_ID;
+const robberyHistoryChannelId = robberyCooldownChannelId;
 const unclaimedEscalationMinutes = Number(process.env.TICKET_ESCALATION_MINUTES || 10);
 const claimAutoReleaseMinutes = Number(process.env.TICKET_CLAIM_AUTO_RELEASE_MINUTES || 10);
 const warningAutoBlockThreshold = Number(process.env.TICKET_WARNING_BLOCK_THRESHOLD || 3);
@@ -111,6 +112,7 @@ module.exports = {
   robberyCooldownMinutes,
   robberyOperationCooldownMinutes,
   robberyHistoryChannelId,
+  robberyCooldownChannelId,
   unclaimedEscalationMinutes,
   claimAutoReleaseMinutes,
   warningAutoBlockThreshold,

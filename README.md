@@ -516,3 +516,11 @@ A standalone workflow embed is used only for recovery after a Render restart.
 - If Neon already says arrival is confirmed but Discord still shows old buttons, clicking Confirm Arrival repairs the message automatically instead of returning `Arrival is already confirmed`.
 - Robbery confirmer is now stored in `robbery_arrived_by`.
 - Cooldown/history logging happens after the UI update, so a secondary logging failure cannot leave stale buttons visible.
+
+# V8.5 — Cooldown Room Fix
+- New preferred env variable: `ROBBERY_COOLDOWN_CHANNEL_ID`.
+- Backward compatible with `ROBBERY_HISTORY_CHANNEL_ID`.
+- Bot fetches the cooldown channel from Discord if it is not already in cache.
+- Sends a dedicated `Robbery Cooldown Started` embed after Confirm Arrival.
+- Embed includes operation, Gang/Mafia, participants, confirmer, cooldown and exact available-again time.
+- Render logs now clearly show whether the cooldown message was sent or why it failed.

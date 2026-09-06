@@ -18,6 +18,7 @@ const {
   robberyCooldownMinutes,
   robberyOperationCooldownMinutes,
   robberyHistoryChannelId,
+  robberyCooldownChannelId,
   supervisorRoleIds
 } = require("./config");
 
@@ -1169,6 +1170,35 @@ async function requestRobberyArrival(interaction, ticket) {
   );
 }
 
+async function resolveRobberyCooldownChannel(guild) {
+  const channelId = robberyCooldownChannelId || robberyHistoryChannelId;
+  if (!channelId) {
+    console.error("❌ Aucun salon cooldown configuré. Ajoute ROBBERY_COOLDOWN_CHANNEL_ID dans Render.");
+    return null;
+  }
+
+  let channel = guild.channels.cache.get(channelId) || null;
+
+  if (!channel) {
+    channel = await guild.channels.fetch(channelId).catch(error => {
+      console.error(`❌ Impossible de récupérer le salon cooldown ${channelId}:`, error);
+      return null;
+    });
+  }
+
+  if (!channel) {
+    console.error(`❌ Salon cooldown introuvable: ${channelId}`);
+    return null;
+  }
+
+  if (!channel.isTextBased()) {
+    console.error(`❌ Le salon cooldown ${channelId} n'est pas un salon texte.`);
+    return null;
+  }
+
+  return channel;
+}
+
 function buildRobberyReadyEmbed(ticket, confirmedById = null) {
   const robbery = robberyConfig.robberies[ticket.robbery_type];
   const confirmedAt = ticket.robbery_arrived_at ? new Date(ticket.robbery_arrived_at) : new Date();
@@ -1311,11 +1341,9 @@ async function confirmRobberyArrival(interaction, ticket) {
     console.error("Erreur cooldown robbery après Confirm Arrival:", error);
   }
 
-  const historyChannel = robberyHistoryChannelId
-    ? interaction.guild.channels.cache.get(robberyHistoryChannelId)
-    : null;
+  const historyChannel = await resolveRobberyCooldownChannel(interaction.guild);
 
-  if (historyChannel?.isTextBased()) {
+  if (historyChannel) {
     try {
       const robbery = robberyConfig.robberies[updated.robbery_type];
       const confirmedAt = new Date(updated.robbery_arrived_at);
@@ -1328,7 +1356,7 @@ async function confirmRobberyArrival(interaction, ticket) {
         : `🔵 ${robberyOperationCooldownMinutes} min`;
 
       const historyEmbed = new EmbedBuilder()
-        .setTitle("📋 Robbery Activity")
+        .setTitle("⏳ Robbery Cooldown Started")
         .addFields(
           { name: "Operation", value: robbery?.label || updated.robbery_type || "Unknown", inline: true },
           { name: "Gang / Mafia", value: updated.group_name || "—", inline: true },
@@ -1338,7 +1366,10 @@ async function confirmRobberyArrival(interaction, ticket) {
           { name: "Arrival Confirmed By", value: `<@${interaction.user.id}>`, inline: true },
           { name: "Arrival Time", value: `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s`, inline: true },
           { name: "Cooldown", value: cooldownText, inline: true },
-          { name: "Status", value: "🟢 READY", inline: true }
+          { name: "Status", value: "🔵 COOLDOWN ACTIVE", inline: true },
+          ...(cooldown?.expires_at ? [
+            { name: "Available Again", value: `<t:${Math.floor(new Date(cooldown.expires_at).getTime()/1000)}:F>`, inline: false }
+          ] : [])
         )
         .setFooter({ text: updated.ticket_code || `Ticket #${updated.id}` })
         .setTimestamp(confirmedAt);
@@ -1347,9 +1378,13 @@ async function confirmRobberyArrival(interaction, ticket) {
         embeds: [historyEmbed],
         allowedMentions: { parse: [] }
       });
+
+      console.log(`✅ Cooldown envoyé dans #${historyChannel.name} (${historyChannel.id}) pour ${updated.robbery_type}.`);
     } catch (error) {
-      console.error("Erreur log Robbery Activity:", error);
+      console.error(`❌ Erreur envoi salon cooldown ${historyChannel.id}:`, error);
     }
+  } else {
+    console.error("❌ Aucun salon cooldown utilisable trouvé.");
   }
 }
 
