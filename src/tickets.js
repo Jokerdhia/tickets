@@ -45,6 +45,30 @@ function safeName(value) {
     .slice(0, 60) || "user";
 }
 
+function robberyWorkflowHint(decision = "pending", arrivalRequested = false, arrived = false) {
+  if (arrived) {
+    return "✅ **Ready:** robbery approved and arrival confirmed. Only close the ticket when finished.";
+  }
+
+  if (decision === "pending") {
+    return "👮 **Police:** Claim the ticket, then Approve or Reject.";
+  }
+
+  if (decision === "accepted" && !arrivalRequested) {
+    return "📍 **Criminal:** when everyone is on site, click **Request Arrival**.";
+  }
+
+  if (decision === "accepted" && arrivalRequested) {
+    return "👮 **Police:** check the location, then click **Confirm Arrival** or **Reject Arrival**.";
+  }
+
+  if (decision === "refused") {
+    return "❌ **Rejected:** this robbery request was refused.";
+  }
+
+  return "";
+}
+
 function ticketControls(claimedBy = null, ticketType = null, arrived = false, decision = "pending", arrivalRequested = false) {
   if (ticketType !== "robbery") {
     return [
@@ -72,25 +96,25 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("robbery_accept")
-          .setLabel("STAFF • Approve")
+          .setLabel("Police • Approve")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_request_arrival")
-          .setLabel("REQUESTER • Request Arrival")
+          .setLabel("Criminal • Request Arrival")
           .setEmoji("📍")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_confirm_arrival")
-          .setLabel("STAFF • Confirm Arrival")
+          .setLabel("Police • Confirm Arrival")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_reject_arrival")
-          .setLabel("STAFF • Reject Arrival")
+          .setLabel("Police • Reject Arrival")
           .setEmoji("❌")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
@@ -111,18 +135,18 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_claim")
-          .setLabel("STAFF • Claim")
+          .setLabel("Police • Claim")
           .setEmoji("🙋")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId("robbery_accept")
-          .setLabel("STAFF • Approve")
+          .setLabel("Police • Approve")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_request_arrival")
-          .setLabel("REQUESTER • Request Arrival")
+          .setLabel("Criminal • Request Arrival")
           .setEmoji("📍")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
@@ -130,13 +154,13 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("robbery_confirm_arrival")
-          .setLabel("STAFF • Confirm Arrival")
+          .setLabel("Police • Confirm Arrival")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_reject_arrival")
-          .setLabel("STAFF • Reject Arrival")
+          .setLabel("Police • Reject Arrival")
           .setEmoji("❌")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
@@ -155,36 +179,36 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_unclaim")
-          .setLabel("STAFF • Release")
+          .setLabel("Police • Release")
           .setEmoji("↩️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("robbery_accept")
-          .setLabel("STAFF • Approve")
+          .setLabel("Police • Approve")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId("robbery_refuse")
-          .setLabel("STAFF • Reject")
+          .setLabel("Police • Reject")
           .setEmoji("❌")
           .setStyle(ButtonStyle.Danger)
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("robbery_request_arrival")
-          .setLabel("REQUESTER • Request Arrival")
+          .setLabel("Criminal • Request Arrival")
           .setEmoji("📍")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_confirm_arrival")
-          .setLabel("STAFF • Confirm Arrival")
+          .setLabel("Police • Confirm Arrival")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_reject_arrival")
-          .setLabel("STAFF • Reject Arrival")
+          .setLabel("Police • Reject Arrival")
           .setEmoji("❌")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
@@ -192,17 +216,17 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_transfer")
-          .setLabel("STAFF • Transfer")
+          .setLabel("Police • Transfer")
           .setEmoji("🔁")
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId("ticket_note")
-          .setLabel("STAFF • Add Note")
+          .setLabel("Police • Add Note")
           .setEmoji("📝")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("ticket_takeover")
-          .setLabel("HIGH GRADE • Take Over")
+          .setLabel("High Grade • Take Over")
           .setEmoji("🛡️")
           .setStyle(ButtonStyle.Secondary)
       )
@@ -215,18 +239,18 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("robbery_request_arrival")
-          .setLabel("REQUESTER • Request Arrival")
+          .setLabel("Criminal • Request Arrival")
           .setEmoji("📍")
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId("robbery_confirm_arrival")
-          .setLabel("STAFF • Confirm Arrival")
+          .setLabel("Police • Confirm Arrival")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_reject_arrival")
-          .setLabel("STAFF • Reject Arrival")
+          .setLabel("Police • Reject Arrival")
           .setEmoji("❌")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true)
@@ -234,17 +258,17 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_transfer")
-          .setLabel("STAFF • Transfer")
+          .setLabel("Police • Transfer")
           .setEmoji("🔁")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("ticket_note")
-          .setLabel("STAFF • Add Note")
+          .setLabel("Police • Add Note")
           .setEmoji("📝")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("ticket_takeover")
-          .setLabel("HIGH GRADE • Take Over")
+          .setLabel("High Grade • Take Over")
           .setEmoji("🛡️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
@@ -263,35 +287,35 @@ function ticketControls(claimedBy = null, ticketType = null, arrived = false, de
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("robbery_request_arrival")
-          .setLabel("REQUESTER • Arrival Requested")
+          .setLabel("Criminal • Arrival Requested")
           .setEmoji("📍")
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(true),
         new ButtonBuilder()
           .setCustomId("robbery_confirm_arrival")
-          .setLabel("STAFF • Confirm Arrival")
+          .setLabel("Police • Confirm Arrival")
           .setEmoji("✅")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId("robbery_reject_arrival")
-          .setLabel("STAFF • Reject Arrival")
+          .setLabel("Police • Reject Arrival")
           .setEmoji("❌")
           .setStyle(ButtonStyle.Danger)
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_transfer")
-          .setLabel("STAFF • Transfer")
+          .setLabel("Police • Transfer")
           .setEmoji("🔁")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("ticket_note")
-          .setLabel("STAFF • Add Note")
+          .setLabel("Police • Add Note")
           .setEmoji("📝")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("ticket_takeover")
-          .setLabel("HIGH GRADE • Take Over")
+          .setLabel("High Grade • Take Over")
           .setEmoji("🛡️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
@@ -1186,6 +1210,7 @@ async function acceptRobbery(interaction, ticket) {
   const unix = Math.floor(deadline.getTime() / 1000);
   const embed = new EmbedBuilder()
     .setTitle("✅ Robbery Approved")
+    .setDescription(robberyWorkflowHint("accepted", false, false))
     .setDescription([
       `تم قبول العملية بواسطة ${interaction.user}.`,
       "",
@@ -1287,7 +1312,7 @@ async function requestRobberyArrival(interaction, ticket) {
     return interaction.reply({ content: "⏳ An arrival confirmation is already waiting for police review.", ephemeral: true });
   }
   if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() <= Date.now()) {
-    return interaction.reply({ content: "❌ The 30-minute arrival deadline has expired.", ephemeral: true });
+    return interaction.reply({ content: "❌ The 30-minute arrival time has expired.", ephemeral: true });
   }
 
   const updated = await db.requestRobberyArrival(ticket.id, interaction.user.id);
@@ -1301,7 +1326,8 @@ async function requestRobberyArrival(interaction, ticket) {
   const remainingSeconds = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
 
   const embed = new EmbedBuilder()
-    .setTitle("📍 Arrival Confirmation Requested")
+    .setTitle("📍 Arrival Check Requested")
+    .setDescription(robberyWorkflowHint("accepted", true, false))
     .setDescription([
       `${interaction.user} يعلن أن جميع المشاركين وصلوا إلى موقع العملية.`,
       "",
@@ -1396,7 +1422,7 @@ async function sendRobberyCooldownNotice(guild, ticket, confirmedById = null) {
   const confirmer = confirmedById || ticket.robbery_arrived_by;
 
   const embed = new EmbedBuilder()
-    .setTitle("⏳ Robbery Cooldown Started")
+    .setTitle("⏳ Robbery Cooldown")
     .addFields(
       { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
       { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
@@ -1406,7 +1432,7 @@ async function sendRobberyCooldownNotice(guild, ticket, confirmedById = null) {
       { name: "Cooldown", value: cooldown?.expires_at
         ? `🔵 ${robberyOperationCooldownMinutes} min • ends <t:${Math.floor(new Date(cooldown.expires_at).getTime()/1000)}:R>`
         : `🔵 ${robberyOperationCooldownMinutes} min`, inline: true },
-      { name: "Status", value: "🔵 COOLDOWN ACTIVE", inline: true }
+      { name: "Status", value: "🔵 Active", inline: true }
     )
     .setFooter({ text: ticket.ticket_code || `Ticket #${ticket.id}` })
     .setTimestamp(confirmedAt);
@@ -1431,6 +1457,7 @@ function buildRobberyReadyEmbed(ticket, confirmedById = null) {
 
   return new EmbedBuilder()
     .setTitle("✅ Robbery Ready")
+    .setDescription(robberyWorkflowHint("accepted", true, true))
     .addFields(
       { name: "Operation", value: robbery?.label || ticket.robbery_type || "Unknown", inline: true },
       { name: "Gang / Mafia", value: ticket.group_name || "—", inline: true },
@@ -1446,13 +1473,13 @@ function buildRobberyReadyEmbed(ticket, confirmedById = null) {
 
 async function confirmRobberyArrival(interaction, ticket) {
   if (!canManageTicket(interaction.member, ticket)) {
-    return interaction.reply({ content: "❌ Only authorized HMPD staff can confirm arrival.", ephemeral: true });
+    return interaction.reply({ content: "❌ Only Police staff can confirm arrival.", ephemeral: true });
   }
   if ((ticket.robbery_decision || "pending") !== "accepted") {
-    return interaction.reply({ content: "❌ The robbery is not approved.", ephemeral: true });
+    return interaction.reply({ content: "❌ This robbery has not been approved yet.", ephemeral: true });
   }
   if (!ticket.arrival_requested_at) {
-    return interaction.reply({ content: "❌ The requester has not submitted **Request Arrival** yet.", ephemeral: true });
+    return interaction.reply({ content: "❌ The criminal must click **Request Arrival** first.", ephemeral: true });
   }
 
   // Self-heal: DB already says READY but Discord still shows old buttons.
@@ -1488,7 +1515,7 @@ async function confirmRobberyArrival(interaction, ticket) {
   }
 
   if (ticket.robbery_deadline && new Date(ticket.robbery_deadline).getTime() <= Date.now()) {
-    return interaction.reply({ content: "❌ The 30-minute arrival deadline has expired.", ephemeral: true });
+    return interaction.reply({ content: "❌ The 30-minute arrival time has expired.", ephemeral: true });
   }
 
   const updated = await db.confirmRobberyArrival(ticket.id, interaction.user.id);
@@ -1526,7 +1553,7 @@ async function confirmRobberyArrival(interaction, ticket) {
       return;
     }
 
-    return interaction.reply({ content: "❌ Arrival could not be confirmed.", ephemeral: true });
+    return interaction.reply({ content: "❌ Could not confirm arrival. Please try again.", ephemeral: true });
   }
 
   await logTimeline(updated, "ARRIVAL_CONFIRMED", interaction.user.id);
@@ -1558,13 +1585,13 @@ async function confirmRobberyArrival(interaction, ticket) {
 
 async function rejectRobberyArrival(interaction, ticket) {
   if (!canManageTicket(interaction.member, ticket)) {
-    return interaction.reply({ content: "❌ Only authorized HMPD staff can reject arrival.", ephemeral: true });
+    return interaction.reply({ content: "❌ Only Police staff can reject arrival.", ephemeral: true });
   }
   if ((ticket.robbery_decision || "pending") !== "accepted") {
-    return interaction.reply({ content: "❌ The robbery is not approved.", ephemeral: true });
+    return interaction.reply({ content: "❌ This robbery has not been approved yet.", ephemeral: true });
   }
   if (!ticket.arrival_requested_at) {
-    return interaction.reply({ content: "❌ There is no pending arrival request.", ephemeral: true });
+    return interaction.reply({ content: "❌ There is no arrival request to review.", ephemeral: true });
   }
   if (ticket.robbery_arrived_at) {
     return interaction.reply({ content: "✅ Arrival is already confirmed.", ephemeral: true });

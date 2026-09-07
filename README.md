@@ -548,3 +548,11 @@ A standalone workflow embed is used only for recovery after a Render restart.
 - Police Complaint tickets are never auto-released.
 - Speed Hunters tickets are never auto-released.
 - Added both a PostgreSQL filter and a runtime safety guard.
+
+# V8.9 — Simpler UX + Warning Cleanup
+- Updated Discord event from `ready` to `clientReady` to remove the discord.js deprecation warning.
+- Simplified button labels for users: `Police`, `Criminal`, and `High Grade`.
+- Added short workflow instructions inside robbery embeds.
+- Simplified arrival and cooldown wording.
+- Startup logs now show which cooldown room ID is configured and the cooldown duration.
+- PostgreSQL SSL: in Render, prefer a `DATABASE_URL` ending in `sslmode=verify-full` to remove the pg SSL warning while keeping certificate verification.

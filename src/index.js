@@ -272,8 +272,10 @@ async function expireRobberyTickets() {
   }
 }
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
+  console.log(`ℹ️ Cooldown room config: ${process.env.ROBBERY_COOLDOWN_CHANNEL_ID || process.env.ROBBERY_HISTORY_CHANNEL_ID || "NOT SET"}`);
+  console.log(`ℹ️ Robbery cooldown: ${process.env.ROBBERY_OPERATION_COOLDOWN_MINUTES || 30} minute(s)`);
   console.log(`✅ Serveurs : ${client.guilds.cache.size}`);
   await expireRobberyTickets();
   await sendRobberyReminders();

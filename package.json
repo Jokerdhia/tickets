@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.8.0",
-  "description": "HMPD Ticket Bot V8.8 Pro - auto release restricted to robbery tickets",
+  "version": "8.9.0",
+  "description": "HMPD Ticket Bot V8.9 Pro - simpler user workflow and cleaner startup",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
