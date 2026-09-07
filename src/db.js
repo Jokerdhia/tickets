@@ -645,6 +645,7 @@ async function getStaleClaimedTickets(minutes) {
   const { rows } = await pool.query(
     `SELECT * FROM tickets
      WHERE status = 'open'
+       AND ticket_type = 'robbery'
        AND claimed_by IS NOT NULL
        AND COALESCE(robbery_decision, 'pending') = 'pending'
        AND COALESCE(last_staff_action_at, claimed_at) <= NOW() - ($1::text || ' minutes')::interval`,

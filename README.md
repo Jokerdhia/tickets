@@ -541,3 +541,10 @@ A standalone workflow embed is used only for recovery after a Render restart.
 - Discord cannot make the exact same shared button active for Staff and grey only for Illegal, so permissions are still enforced server-side on click.
 - After Request Arrival, requester button becomes grey and Police Confirm/Reject become active.
 - After Confirm Arrival, previous workflow buttons are grey and only Close remains active.
+
+# V8.8 — Auto Release only for Robbery
+- Automatic release after staff inactivity applies ONLY to `robbery` tickets.
+- Police / HMPD tickets are never auto-released.
+- Police Complaint tickets are never auto-released.
+- Speed Hunters tickets are never auto-released.
+- Added both a PostgreSQL filter and a runtime safety guard.

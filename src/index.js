@@ -99,6 +99,12 @@ async function autoReleaseStaleClaims() {
 
     const stale = await db.getStaleClaimedTickets(claimAutoReleaseMinutes);
     for (const ticket of stale) {
+      // V8.8 safety: Auto Release is allowed ONLY for Robbery tickets.
+      if (ticket.ticket_type !== "robbery") {
+        console.warn(`⚠️ Auto-release ignored for non-robbery ticket ${ticket.ticket_code || ticket.id} (${ticket.ticket_type}).`);
+        continue;
+      }
+
       const guild = client.guilds.cache.get(ticket.guild_id);
       const channel = guild?.channels.cache.get(ticket.channel_id);
       if (!channel?.isTextBased()) continue;
@@ -110,7 +116,7 @@ async function autoReleaseStaleClaims() {
       await channel.send({
         content: `<@${ticket.owner_id}>`,
         embeds: [{
-          title: "♻️ Ticket Auto-Released",
+          title: "♻️ Robbery Ticket Auto-Released",
           description: `The ticket was released because <@${previous}> did not take action for **${claimAutoReleaseMinutes} minutes**.`,
           timestamp: new Date().toISOString()
         }],

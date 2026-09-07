@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.7.0",
-  "description": "HMPD Ticket Bot V8.7 Pro - role-labelled workflow buttons with disabled grey states",
+  "version": "8.8.0",
+  "description": "HMPD Ticket Bot V8.8 Pro - auto release restricted to robbery tickets",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
