@@ -63,15 +63,39 @@ const client = new Client({
   ]
 });
 
-async function registerCommands() {
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function registerCommands({ maxAttempts = 5 } = {}) {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-  await rest.put(
-    Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-    { body: commands }
-  );
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await rest.put(
+        Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+        { body: commands }
+      );
+      console.log(`✅ ${commands.length} commandes slash synchronisées.`);
+      return true;
+    } catch (error) {
+      const status = Number(error?.status || 0);
+      console.error(`❌ Synchronisation commandes Discord (${attempt}/${maxAttempts}) :`, error?.message || error);
 
-  console.log(`✅ ${commands.length} commandes slash synchronisées.`);
+      // Discord 5xx = erreur serveur temporaire. On réessaie avec backoff.
+      if (status >= 500 && status < 600 && attempt < maxAttempts) {
+        const delay = Math.min(30000, attempt * 5000);
+        console.log(`⏳ Nouvelle tentative dans ${delay / 1000}s...`);
+        await sleep(delay);
+        continue;
+      }
+
+      // Une panne de synchronisation ne doit jamais arrêter le bot.
+      console.error("⚠️ Le bot continuera avec les commandes déjà enregistrées sur Discord.");
+      return false;
+    }
+  }
+  return false;
 }
 
 
@@ -503,10 +527,25 @@ http.createServer((req, res) => {
 (async () => {
   try {
     await initDb();
-    await registerCommands();
     await client.login(process.env.DISCORD_TOKEN);
+
+    // La connexion Discord est prioritaire. La synchro des commandes est
+    // indépendante et ne doit pas provoquer un crash Render en cas de 5xx.
+    registerCommands().catch(error => {
+      console.error("⚠️ Erreur inattendue pendant la synchro des commandes :", error);
+    });
   } catch (error) {
     console.error("❌ Démarrage impossible :", error);
     process.exit(1);
   }
 })();
+
+async function shutdown(signal) {
+  console.log(`🛑 ${signal} reçu, arrêt propre...`);
+  try { client.destroy(); } catch (_) {}
+  try { await db.closePool?.(); } catch (error) { console.error("Erreur fermeture DB:", error); }
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));

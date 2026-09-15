@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.9.0",
-  "description": "HMPD Ticket Bot V8.9 Pro - simpler user workflow and cleaner startup",
+  "version": "8.9.1",
+  "description": "HMPD Ticket Bot V8.9.1 - resilient Discord startup and bug fixes",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

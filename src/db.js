@@ -75,7 +75,6 @@ async function initDb() {
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS ticket_code TEXT;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMPTZ;`);
   await pool.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS last_staff_action_at TIMESTAMPTZ;`);
-  await pool.query(`ALTER TABLE ticket_blacklist ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`).catch(() => {});
 
 
   await pool.query(`
@@ -730,7 +729,13 @@ async function getPendingCooldownNotices() {
   return rows;
 }
 
+
+async function closePool() {
+  await pool.end();
+}
+
 module.exports = {
+  closePool,
   pool,
   initDb,
   createTicket,

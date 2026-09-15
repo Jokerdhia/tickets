@@ -104,11 +104,11 @@ function canPublishPanel(member) {
 }
 
 function canSupervise(member) {
-  return member.permissions.has(PermissionFlagsBits.Administrator) ||
+  return (
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
     member.permissions.has(PermissionFlagsBits.ManageGuild) ||
-    supervisorRoleIds,
-  warningAutoBlockThreshold,
-  warningAutoBlockMinutes.some(id => member.roles.cache.has(id));
+    supervisorRoleIds.some(id => member.roles.cache.has(id))
+  );
 }
 
 async function handleCommand(interaction) {
