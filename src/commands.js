@@ -251,10 +251,10 @@ if (interaction.commandName === "ticket-timeline") {
 }
 
 if (interaction.commandName === "reset-server") {
-  // Sécurité maximale : seul le propriétaire du serveur peut lancer le reset.
-  if (interaction.user.id !== interaction.guild.ownerId) {
+  // Sécurité : tous les membres ayant la permission Administrateur peuvent lancer le reset.
+  if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return interaction.reply({
-      content: "❌ Seul le propriétaire du serveur peut utiliser cette commande.",
+      content: "❌ Seuls les administrateurs peuvent utiliser cette commande.",
       ephemeral: true
     });
   }
