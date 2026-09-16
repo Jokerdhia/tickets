@@ -268,9 +268,65 @@ if (interaction.commandName === "reset-server") {
   }
 
   await interaction.reply({
-    content: "⚠️ Reset confirmé. Suppression de tous les salons et catégories…",
+    content: "⚠️ Reset confirmé. Expulsion des membres puis suppression des rôles, salons et catégories…",
     ephemeral: true
   });
+
+  // Expulser tous les membres expulsables avant de supprimer les rôles.
+  // Le propriétaire du serveur, le bot lui-même et les membres non-kickable sont conservés.
+  await interaction.guild.members.fetch();
+
+  const membersToKick = interaction.guild.members.cache.filter(member =>
+    member.id !== interaction.guild.ownerId &&
+    member.id !== interaction.client.user.id &&
+    !member.user.bot &&
+    member.kickable
+  );
+
+  for (const member of membersToKick.values()) {
+    try {
+      await member.kick(`Reset serveur demandé par ${interaction.user.tag}`);
+      console.log(`👢 Membre expulsé : ${member.user.tag}`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error(`❌ Impossible d'expulser ${member.user.tag}:`, error.message);
+    }
+  }
+
+  // Supprimer tous les rôles que Discord autorise le bot à supprimer.
+  // @everyone, les rôles gérés par Discord/bots/intégrations et les rôles
+  // placés au-dessus du rôle du bot ne peuvent pas être supprimés.
+  await interaction.guild.roles.fetch();
+
+  // Suppression robuste des rôles. Discord interdit toujours la suppression de
+  // @everyone, des rôles gérés par une intégration/bot et des rôles placés
+  // au même niveau ou au-dessus du rôle le plus haut de ce bot.
+  const me = interaction.guild.members.me || await interaction.guild.members.fetchMe();
+  const botTopRole = me.roles.highest;
+
+  const rolesToProcess = [...interaction.guild.roles.cache.values()]
+    .filter(role => role.id !== interaction.guild.id) // jamais @everyone
+    .sort((a, b) => b.position - a.position);
+
+  for (const role of rolesToProcess) {
+    if (role.managed) {
+      console.log(`⏭️ Rôle géré par Discord/intégration conservé : ${role.name}`);
+      continue;
+    }
+
+    if (role.position >= botTopRole.position || !role.editable) {
+      console.log(`⏭️ Rôle trop haut pour le bot : ${role.name} (position ${role.position}, bot ${botTopRole.position})`);
+      continue;
+    }
+
+    try {
+      await role.delete(`Reset serveur demandé par ${interaction.user.tag}`);
+      console.log(`🗑️ Rôle supprimé : ${role.name}`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error(`❌ Impossible de supprimer le rôle ${role.name}: ${error.code || ""} ${error.message}`);
+    }
+  }
 
   await interaction.guild.channels.fetch();
 
@@ -301,7 +357,7 @@ if (interaction.commandName === "reset-server") {
     }
   }
 
-  console.log(`✅ Reset serveur terminé par ${interaction.user.tag} (${interaction.user.id}).`);
+  console.log(`✅ Reset complet (membres + rôles + salons + catégories) terminé par ${interaction.user.tag} (${interaction.user.id}).`);
   return;
 }
 
