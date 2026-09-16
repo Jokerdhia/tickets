@@ -1,7 +1,7 @@
 {
   "name": "hmpd-ticket-bot",
-  "version": "8.9.1",
-  "description": "HMPD Ticket Bot V8.9.1 - resilient Discord startup and bug fixes",
+  "version": "8.9.2",
+  "description": "HMPD Ticket Bot V8.9.2 - safe owner-only server reset command",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

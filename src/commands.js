@@ -1,7 +1,8 @@
 const {
   EmbedBuilder,
   PermissionFlagsBits,
-  SlashCommandBuilder
+  SlashCommandBuilder,
+  ChannelType
 } = require("discord.js");
 
 const {
@@ -78,6 +79,17 @@ const commands = [
     .addSubcommand(sub =>
       sub.setName("check").setDescription("التحقق من مستخدم")
         .addUserOption(o => o.setName("user").setDescription("المستخدم").setRequired(true))
+    ),
+
+  new SlashCommandBuilder()
+    .setName("reset-server")
+    .setDescription("⚠️ Supprime tous les salons et catégories du serveur")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(option =>
+      option
+        .setName("confirmation")
+        .setDescription("Écris exactement RESET pour confirmer")
+        .setRequired(true)
     ),
 
   new SlashCommandBuilder()
@@ -236,6 +248,61 @@ if (interaction.commandName === "ticket-timeline") {
     embeds: [new EmbedBuilder().setTitle(`🕒 Timeline • ${ticket.ticket_code || `TK-${ticket.id}`}`).setDescription(body).setTimestamp()],
     ephemeral: true
   });
+}
+
+if (interaction.commandName === "reset-server") {
+  // Sécurité maximale : seul le propriétaire du serveur peut lancer le reset.
+  if (interaction.user.id !== interaction.guild.ownerId) {
+    return interaction.reply({
+      content: "❌ Seul le propriétaire du serveur peut utiliser cette commande.",
+      ephemeral: true
+    });
+  }
+
+  const confirmation = interaction.options.getString("confirmation", true);
+  if (confirmation !== "RESET") {
+    return interaction.reply({
+      content: "❌ Reset annulé. Pour confirmer, écris exactement `RESET`.",
+      ephemeral: true
+    });
+  }
+
+  await interaction.reply({
+    content: "⚠️ Reset confirmé. Suppression de tous les salons et catégories…",
+    ephemeral: true
+  });
+
+  await interaction.guild.channels.fetch();
+
+  // Supprimer d'abord tous les salons, puis les catégories.
+  const normalChannels = interaction.guild.channels.cache.filter(
+    channel => channel.type !== ChannelType.GuildCategory
+  );
+
+  for (const channel of normalChannels.values()) {
+    try {
+      await channel.delete(`Reset serveur demandé par ${interaction.user.tag}`);
+      await new Promise(resolve => setTimeout(resolve, 350));
+    } catch (error) {
+      console.error(`❌ Impossible de supprimer le salon ${channel.name}:`, error.message);
+    }
+  }
+
+  const categories = interaction.guild.channels.cache.filter(
+    channel => channel.type === ChannelType.GuildCategory
+  );
+
+  for (const category of categories.values()) {
+    try {
+      await category.delete(`Reset serveur demandé par ${interaction.user.tag}`);
+      await new Promise(resolve => setTimeout(resolve, 350));
+    } catch (error) {
+      console.error(`❌ Impossible de supprimer la catégorie ${category.name}:`, error.message);
+    }
+  }
+
+  console.log(`✅ Reset serveur terminé par ${interaction.user.tag} (${interaction.user.id}).`);
+  return;
 }
 
 if (interaction.commandName === "ticket-blacklist") {
